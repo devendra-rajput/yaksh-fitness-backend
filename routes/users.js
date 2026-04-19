@@ -1,98 +1,242 @@
+/**
+ * User Routes
+ * Defines all user-related API endpoints
+ */
+
 const express = require('express');
-const routes = express.Router();
-
-/** Controllers **/
-const userController = require("../resources/v1/users/users.controller");
-
-/** Model */
+const userController = require('../resources/v1/users/users.controller');
 const UserModel = require('../resources/v1/users/users.model');
+const userValidation = require('../resources/v1/users/users.validation');
+const { auth } = require('../middleware/v1/authorize');
+const uploadUtils = require('../utils/upload');
+const aws = require('../services/aws');
 
-/** Validations **/
-const userValidation = require("../resources/v1/users/users.validation");
+/**
+ * Upload configuration constants
+ */
+const UPLOAD_CONFIG = {
+  validExtensions: /jpg|jpeg|png|heic/,
+  maxFileSize: 5 * 1024 * 1024, // 5 MB
+  maxBulkFiles: 5,
+};
 
-/** Middleware **/
-const authMiddleware = require("../middleware/v1/authorize");
+/**
+ * Get upload directory path
+ */
+const getUploadDirectory = () => {
+  const date = new Date();
+  return `uploads/${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+};
 
-/** Utility file */
-const uploadUtils = require("../utils/upload");
-const aws = require("../services/aws");
+/**
+ * Create file upload middleware
+ */
+const createUploadMiddleware = (directory, fieldName = 'image', isMultiple = false) => {
+  const upload = uploadUtils.uploadFile(
+    UPLOAD_CONFIG.validExtensions,
+    UPLOAD_CONFIG.maxFileSize,
+    directory,
+  );
 
-const dateObj = new Date();
-const uploadDirectory = "uploads/" + dateObj.getFullYear() + "/" + (dateObj.getMonth() + 1) + "/" + dateObj.getDate();
-const validFileExtenstions = /jpg|jpeg|png|heic/;
-const maxFileSize = 5 * 1024 * 1024 // 5 MB
+  return isMultiple
+    ? upload.array(fieldName, UPLOAD_CONFIG.maxBulkFiles)
+    : upload.single(fieldName);
+};
 
-/** Routes **/
-routes.post('/create', [userValidation.createOne], userController.createOne);
-routes.post('/resend-otp', [userValidation.resendOtp], userController.resendOtp);
-routes.post('/verify', [userValidation.verifyOtp], userController.verifyOtp);
-routes.put(
-    '/:id',
+/**
+ * Authentication Routes (Public)
+ */
+const createAuthRoutes = (router) => {
+  // User registration
+  router.post(
+    '/create',
     [
-        authMiddleware.auth(),
-        uploadUtils.uploadFile(validFileExtenstions, maxFileSize, uploadDirectory).single('image'),
-        userValidation.updateOne,
-        aws.uploadFile
+      createUploadMiddleware(getUploadDirectory()),
+      userValidation.createOne,
     ],
-    userController.updateOne
-);
-routes.put('/lab/:id', [authMiddleware.auth(), userValidation.updateLabData], userController.updateLabData);
-routes.post('/login', [userValidation.userLogin], userController.userLogin);
-routes.post("/forgot-password", [userValidation.forgotPassword], userController.forgotPassword);
-routes.post("/forgot-password/verify-otp", [userValidation.verifyForgotPasswordOTP], userController.verifyForgotPasswordOTP);
-routes.post("/reset-password", [userValidation.resetPassword], userController.resetPassword);
-routes.get('/logout', [authMiddleware.auth()], userController.logout)
-routes.delete('/', [authMiddleware.auth()], userController.deleteOne);
-routes.put('/change-status/:id', [authMiddleware.auth(UserModel.roles.ADMIN), userValidation.changeStatus], userController.changeStatus);
+    userController.createOne,
+  );
 
-routes.get('/profile', [authMiddleware.auth()], userController.getUserProfile);
-routes.post('/change-password', [authMiddleware.auth(), userValidation.changePassword], userController.changePassword);
-routes.get('/', [authMiddleware.auth(UserModel.roles.ADMIN)], userController.getAllWithPagination);
+  // Resend OTP
+  router.post(
+    '/resend-otp',
+    [userValidation.resendOtp],
+    userController.resendOtp,
+  );
 
-routes.post('/social-login', [userValidation.socialLogin], userController.socialLogin);
-routes.get('/stripe-connect-url', [authMiddleware.auth()], userController.getStripeConnectUrl);
-routes.get('/verify-stripe-connect', [authMiddleware.auth()], userController.verifyStripeConnect);
-routes.get('/stripe-webhook', [express.raw({ type: 'application/json' })], userController.handleStripeWebhook);
+  // Verify OTP
+  router.post(
+    '/verify',
+    [userValidation.verifyOtp],
+    userController.verifyOtp,
+  );
 
-routes.get('/home', [authMiddleware.auth()], userController.getHomeData);
-routes.get('/fitness-plan', [authMiddleware.auth()], userController.getFitnessPlan);
+  // User login
+  router.post(
+    '/login',
+    [userValidation.userLogin],
+    userController.userLogin,
+  );
 
-routes.get('/tokens/leaderboard', [ authMiddleware.auth() ], userController.getLeaderBoardUsers);
-routes.get('/referrals/summary', [authMiddleware.auth()], userController.getReferralSummary);
-routes.get('/referrals/history', [authMiddleware.auth(), userValidation.getReferralHistory], userController.getReferralHistory);
-routes.get('/referrals/withdraw', [authMiddleware.auth()], userController.withdrawReferralAmount);
+  // Forgot password
+  router.post(
+    '/forgot-password',
+    [userValidation.forgotPassword],
+    userController.forgotPassword,
+  );
 
-routes.get('/:id', [authMiddleware.auth(), userValidation.getOne], userController.getOne);
+  // Verify forgot password OTP
+  router.post(
+    '/forgot-password/verify-otp',
+    [userValidation.verifyForgotPasswordOTP],
+    userController.verifyForgotPasswordOTP,
+  );
 
-// routes.post(
-//     '/upload-image',
-//     [   
-//         authMiddleware.auth(),
-//         uploadUtils.uploadFile(validFileExtenstions, maxFileSize, uploadDirectory).single('image')
-//     ],
-//     userController.uploadImage
-// );
+  // Reset password
+  router.post(
+    '/reset-password',
+    [userValidation.resetPassword],
+    userController.resetPassword,
+  );
 
-// routes.post(
-//     '/upload-bulk-images',
-//     [   
-//         authMiddleware.auth(),
-//         uploadUtils.setMaxFileLimit(5), // To return the valid images count in error
-//         uploadUtils.uploadFile(validFileExtenstions, maxFileSize, uploadDirectory).array('images', 5)
-//     ],
-//     userController.uploadBulkImages
-// );
-// routes.post('/delete-image', [ userValidation.deleteImage ], userController.deleteImage);
+  return router;
+};
 
-// routes.post(
-//     '/upload-image-aws',
-//     [   
-//         authMiddleware.auth(),
-//         uploadUtils.uploadFile(validFileExtenstions, maxFileSize, 'uploads/temp').single('image'),
-//         aws.uploadFile
-//     ],
-//     userController.uploadImageAWS
-// );
-// routes.post('/delete-image-aws', [ userValidation.deleteImageAWS ], userController.deleteImageAWS);
+/**
+ * Protected User Routes
+ */
+const createProtectedUserRoutes = (router) => {
+  // Get user profile
+  router.get(
+    '/profile',
+    [auth()],
+    userController.getUserProfile,
+  );
 
-module.exports = routes;
+  // Change password
+  router.post(
+    '/change-password',
+    [auth(), userValidation.changePassword],
+    userController.changePassword,
+  );
+
+  // Logout
+  router.get(
+    '/logout',
+    [auth()],
+    userController.logout,
+  );
+
+  // Delete account
+  router.delete(
+    '/',
+    [auth()],
+    userController.deleteOne,
+  );
+
+  return router;
+};
+
+/**
+ * Image Upload Routes
+ */
+const createImageUploadRoutes = (router) => {
+  const uploadDir = getUploadDirectory();
+
+  // Upload single image (local)
+  router.post(
+    '/upload-image',
+    [
+      auth(),
+      createUploadMiddleware(uploadDir),
+    ],
+    userController.uploadImage,
+  );
+
+  // Upload multiple images (local)
+  router.post(
+    '/upload-bulk-images',
+    [
+      auth(),
+      uploadUtils.setMaxFileLimit(UPLOAD_CONFIG.maxBulkFiles),
+      createUploadMiddleware(uploadDir, 'images', true),
+    ],
+    userController.uploadBulkImages,
+  );
+
+  // Delete image
+  router.post(
+    '/delete-image',
+    [userValidation.deleteImage],
+    userController.deleteImage,
+  );
+
+  return router;
+};
+
+/**
+ * AWS S3 Upload Routes
+ */
+const createAWSUploadRoutes = (router) => {
+  // Upload image to AWS S3
+  router.post(
+    '/upload-image-aws',
+    [
+      auth(),
+      createUploadMiddleware('uploads/temp'),
+      aws.uploadFile,
+    ],
+    userController.uploadImageAWS,
+  );
+
+  // Delete image from AWS S3
+  router.post(
+    '/delete-image-aws',
+    [userValidation.deleteImageAWS],
+    userController.deleteImageAWS,
+  );
+
+  // Generate AWS presigned URL
+  router.post(
+    '/generate-aws-presigned-url',
+    [auth(), userValidation.generatePresignedUrl],
+    userController.generatePresignedUrl,
+  );
+
+  return router;
+};
+
+/**
+ * Admin Routes
+ */
+const createAdminRoutes = (router) => {
+  // Get all users with pagination
+  router.get(
+    '/',
+    [auth(UserModel.roles.ADMIN)],
+    userController.getAllWithPagination,
+  );
+
+  return router;
+};
+
+/**
+ * Initialize all user routes
+ */
+const initializeUserRoutes = () => {
+  const router = express.Router();
+
+  // Register route groups
+  createAuthRoutes(router);
+  createProtectedUserRoutes(router);
+  createImageUploadRoutes(router);
+  createAWSUploadRoutes(router);
+  createAdminRoutes(router);
+
+  return router;
+};
+
+/**
+ * Export configured router
+ */
+module.exports = initializeUserRoutes();

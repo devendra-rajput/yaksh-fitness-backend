@@ -1,76 +1,156 @@
-'use strict';
-require('dotenv').config();
-const jwt = require('jsonwebtoken');
+/**
+ * Authorization Middleware
+ * Handles JWT authentication and role-based authorization
+ */
 
-/** Custom Require **/ 
+const jwt = require('jsonwebtoken');
 const response = require('../../helpers/v1/response.helpers');
 const UserModel = require('../../resources/v1/users/users.model');
 
-class Auth {
-    
-    // Wrap jwt.verify into a Promise for better async/await support
-    verifyToken = (token) => {
-        return new Promise((resolve, reject) => {
-            jwt.verify(token, process.env.JWT_TOKEN_KEY, (err, decoded) => {
-                if (err) {
-                    return reject(err);  // Reject with the error if verification fails
-                }
-                resolve(decoded);  // Resolve with decoded payload if token is valid
-            });
-        });
-    };
-
-    auth = (roleToValidate = null) => {
-
-        return async (req, res, next) => {    
-            console.log('AuthorizationMiddleware@auth');
-
-            if (!req.headers['authorization']) {
-                return response.unauthorized('auth.unauthorizedRequest', res, false);
-            }
-
-            let token = req.headers['authorization'];
-            try {
-
-                // Verify the token
-                const decoded = await this.verifyToken(token);
-
-                // Find user by decoded user_id
-                const user = await UserModel.getOneByColumnNameAndValue('_id', decoded.user_id);
-                if (!user) {
-                    return response.unauthorized('error.userNotFound', res, false);
-                }
-
-                // Check if the token matches the stored auth_token for the user
-                if (!user?.tokens?.auth_token || user.tokens.auth_token !== token) {
-                    return response.unauthorized('auth.tokenMismatch', res, false);
-                }
-
-                // Role validation
-                if (roleToValidate) {
-                    if (![UserModel.roles.ADMIN, UserModel.roles.USER].includes(roleToValidate) || user.role !== roleToValidate) {
-                        return response.badRequest('auth.unauthorizedRole', res, false);
-                    }
-                }
-
-                // Check if the user is active
-                if (user.status !== UserModel.statuses.ACTIVE) {
-                    const errorMessage = res.__('auth.accountBlocked', { supportEmail: process.env.SUPPORT_MAIL });
-                    return response.unauthorized(errorMessage, res, false);
-                }
-
-                // Attach the user to the request
-                req.user = user;
-
-                // Proceed to next middleware
-                next();
-            }
-            catch (error) {
-                return response.unauthorized(error.message, res, false);
-            }
-        }
+/**
+ * Verify JWT token
+ */
+const verifyToken = (token) => new Promise((resolve, reject) => {
+  jwt.verify(token, process.env.JWT_TOKEN_KEY, (err, decoded) => {
+    if (err) {
+      return reject(err);
     }
-}
+    resolve(decoded);
+  });
+});
 
+/**
+ * Extract token from Authorization header
+ */
+const extractToken = (req) => {
+  let token = req.headers.authorization;
 
-module.exports = new Auth;
+  if (!token) {
+    return null;
+  }
+
+  // Remove 'Bearer ' prefix if present
+  if (token.startsWith('Bearer ')) {
+    [, token] = token.split(' ');
+  }
+
+  return token;
+};
+
+/**
+ * Validate user exists and is active
+ */
+const validateUser = (user) => {
+  if (!user) {
+    return { key: 'error.userNotFound' };
+  }
+
+  if (user.status !== UserModel.statuses.ACTIVE) {
+    return {
+      key: 'auth.accountBlocked',
+      params: { supportEmail: process.env.SUPPORT_MAIL },
+    };
+  }
+
+  return null;
+};
+
+/**
+ * Validate token matches stored token
+ */
+const validateTokenMatch = (user, token) => user?.tokens?.auth_token === token;
+
+/**
+ * Validate user role
+ */
+const validateRole = (user, requiredRole) => {
+  if (!requiredRole) {
+    return true; // No role requirement
+  }
+
+  const validRoles = [UserModel.roles.ADMIN, UserModel.roles.USER];
+
+  if (!validRoles.includes(requiredRole)) {
+    return false; // Invalid role specified
+  }
+
+  return user.role === requiredRole;
+};
+
+/**
+ * Authenticate user from token
+ */
+const authenticateUser = async (token) => {
+  // Verify token
+  const decoded = await verifyToken(token);
+
+  // Find user by decoded user_id
+  const user = await UserModel.getOneByColumnNameAndValue('_id', decoded.user_id, true);
+
+  return user;
+};
+
+/**
+ * Authorization middleware factory
+ * Creates middleware with optional role validation
+ */
+const auth = (requiredRole = null) => async (req, res, next) => {
+  try {
+    // Extract token from header
+    const token = extractToken(req);
+    if (!token) {
+      return response.unauthorized('auth.unauthorizedRequest', res, false);
+    }
+
+    // Authenticate user
+    const user = await authenticateUser(token);
+
+    // Validate user exists and is active
+    const userValidation = validateUser(user);
+    if (userValidation) {
+      const message = userValidation.params
+        ? res.__(userValidation.key, userValidation.params)
+        : userValidation.key;
+      return response.unauthorized(message, res, false);
+    }
+
+    // Validate token matches stored token
+    if (!validateTokenMatch(user, token)) {
+      return response.unauthorized('auth.tokenMismatch', res, false);
+    }
+
+    // Validate role if required
+    if (!validateRole(user, requiredRole)) {
+      return response.badRequest('auth.unauthorizedRole', res, false);
+    }
+
+    // Attach user to request
+    req.user = user;
+
+    // Proceed to next middleware
+    next();
+  } catch (error) {
+    return response.unauthorized(error.message, res, false);
+  }
+};
+
+/**
+ * Convenience middleware for admin-only routes
+ */
+const adminOnly = auth(UserModel.roles.ADMIN);
+
+/**
+ * Convenience middleware for user-only routes
+ */
+const userOnly = auth(UserModel.roles.USER);
+
+module.exports = {
+  auth,
+  adminOnly,
+  userOnly,
+  // Export utilities for testing
+  extractToken,
+  validateUser,
+  validateTokenMatch,
+  validateRole,
+};

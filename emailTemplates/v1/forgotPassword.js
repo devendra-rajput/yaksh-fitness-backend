@@ -1,7 +1,7 @@
 const forgotPassword = async (otp) => {
-   const currentYear = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
 
-   return `
+  return `
       <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
       <html xmlns="http://www.w3.org/1999/xhtml">
          <head>
@@ -33,7 +33,7 @@ const forgotPassword = async (otp) => {
                         <tr>
                            <td>
                               <div align='center' >
-                                 <img style="text-align: center; margin-top: 0; width: 80px; margin-top: 30px;" src="cid:brand_logo" alt="Brand Logo">
+                                 <img style="text-align; margin-top: 20px; width:80px;" src="cid:brand_logo" alt="Brand Logo">
                               </div>
                            </td>
                         </tr>
@@ -57,7 +57,7 @@ const forgotPassword = async (otp) => {
                         </tr>
                         <tr>
                            <td>
-                              <p style="font-family: 'Montserrat', sans-serif;color: #707070;text-align: left;padding: 0px 20px;margin-bottom: 30px;font-size: 14px;line-height: 22px;">Thank you,<br>Elevyn</p>
+                              <p style="font-family: 'Montserrat', sans-serif;color: #707070;text-align: left;padding: 0px 20px;margin-bottom: 30px;font-size: 14px;line-height: 22px;">Thank you,<br>Node JS Boilerplate</p>
                               <p style="font-family: 'Montserrat', sans-serif;color: #707070;text-align: left;padding: 0px 20px;margin-bottom: 30px;font-size: 14px;line-height: 22px;">If you did not make this request or no longer want to change your password, please disregard this message; your account remains safe and your existing password will not be changed.</p>
                            </td>
                         </tr>
@@ -75,7 +75,7 @@ const forgotPassword = async (otp) => {
                </tr>
             </table>
          </body>
-      </html>`
-}
+      </html>`;
+};
 
 module.exports = forgotPassword;

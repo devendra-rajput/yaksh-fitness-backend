@@ -1,90 +1,147 @@
-require('dotenv').config();
-const i18n = require('../../config/v1/i18n');
+/**
+ * Response Helper
+ * Standardized HTTP response functions (Pure Functional)
+ */
 
-class ResponseHelper {
-    success = async (msg, res, data) => {
-        this.sendResponse(200, msg, res, data);
-    };
+const i18n = require('../../config/i18n');
 
-    created = async (msg, res, data) => {
-        this.sendResponse(201, msg, res, data);
-    };
+/**
+ * HTTP Status Codes
+ * Centralized status code constants for better maintainability
+ */
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  NO_CONTENT: 204,
+  MOVED_TEMPORARILY: 302,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  METHOD_NOT_ALLOWED: 405,
+  CONFLICT: 409,
+  UNPROCESSABLE_ENTITY: 422,
+  INTERNAL_SERVER_ERROR: 500,
+};
 
-    disallowed = async (msg, res, data) =>{
-        this.sendResponse(405, msg, res, data);
-    };
+/**
+ * Create response body object
+ */
+const createResponseBody = (statusCode, message, data = null) => {
+  const body = {
+    statusCode,
+    api_ver: process.env.API_VER || 'v1',
+    message: i18n.__(message),
+  };
 
-    noContent = async (msg, res, data) => {
-        this.sendResponse(204, msg, res, data);
-    };
+  // Only add data property if data exists
+  if (data !== null && data !== undefined) {
+    body.data = data;
+  }
 
-    badRequest = async (msg, res, data) => {
-        this.sendResponse(400, msg, res, data);
-    };
+  return body;
+};
 
-    validationError = async (msg, res, data) => {
-        this.sendResponse(422, msg, res, data);
-    };
+/**
+ * Set CORS headers on response
+ */
+const setCORSHeaders = (res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,PATCH,POST,DELETE,OPTIONS');
+  return res;
+};
 
-    unauthorized = async (msg, res, data) => {
-        this.sendResponse(401, msg, res, data);
-    };
+/**
+ * Send HTTP response
+ */
+const sendResponse = (statusCode, message, res, data = null) => {
+  const body = createResponseBody(statusCode, message, data);
+  setCORSHeaders(res);
+  return res.status(statusCode).send(body);
+};
 
-    forbidden = async (msg, res, data) => {
-        this.sendResponse(403, msg, res, data);
-    };
+/**
+ * Create response function factory
+ */
+const createResponseFunction = (statusCode) => (
+  (message, res, data = null) => sendResponse(statusCode, message, res, data)
+);
 
-    notFound = async (msg, res, data) => {
-        this.sendResponse(404, msg, res, data);
-    };
+// Success Responses (2xx)
+const success = createResponseFunction(HTTP_STATUS.OK);
+const created = createResponseFunction(HTTP_STATUS.CREATED);
+const noContent = createResponseFunction(HTTP_STATUS.NO_CONTENT);
 
-    exception = async (msg, res, data) => {
-        this.sendResponse(500, msg, res, data);
-    };
+// Client Error Responses (4xx)
+const badRequest = createResponseFunction(HTTP_STATUS.BAD_REQUEST);
+const unauthorized = createResponseFunction(HTTP_STATUS.UNAUTHORIZED);
+const forbidden = createResponseFunction(HTTP_STATUS.FORBIDDEN);
+const notFound = createResponseFunction(HTTP_STATUS.NOT_FOUND);
+const disallowed = createResponseFunction(HTTP_STATUS.METHOD_NOT_ALLOWED);
+const conflict = createResponseFunction(HTTP_STATUS.CONFLICT);
+const validationError = createResponseFunction(HTTP_STATUS.UNPROCESSABLE_ENTITY);
 
-    conflict = async (msg, res, data) => {
-        this.sendResponse(409, msg, res, data);
-    };
+// Server Error Responses (5xx)
+const exception = createResponseFunction(HTTP_STATUS.INTERNAL_SERVER_ERROR);
 
-    custom = async (code, msg, res, data) => {
-        this.sendResponse(code, msg, res, data);
-    }
+/**
+ * Send custom status code response
+ */
+const custom = (statusCode, message, res, data = null) => (
+  sendResponse(statusCode, message, res, data)
+);
 
-    redirect = async (url, res) => {
-        return res.status(302).send({
-            api_ver: process.env.API_VER,
-            redirect_to: url,
-        });
-    };
+/**
+ * Send redirect response
+ */
+const redirect = (url, res) => res.status(HTTP_STATUS.MOVED_TEMPORARILY).send({
+  api_ver: process.env.API_VER || 'v1',
+  redirect_to: url,
+});
 
-    twoFactorEnabled = async (res) => {
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        return res.status(200).send({
-            api_ver: process.env.API_VER,
-            msg: 'TwoFactor authentication has been enabled for your account. We have sent you an access code to the phone associated to your account. Please verify the code to proceed',
-            two_factor: true
-        });
-    };
+/**
+ * Send two-factor authentication enabled response
+ */
+const twoFactorEnabled = (res) => {
+  setCORSHeaders(res);
+  return res.status(HTTP_STATUS.OK).send({
+    api_ver: process.env.API_VER || 'v1',
+    message: i18n.__('auth.twoFactorEnabled'),
+    two_factor: true,
+  });
+};
 
-    sendResponse = async (code, msg, res, data) => {
-        console.log(msg, "=======msg");
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,PATCH,POST,DELETE,OPTIONS');
+/**
+ * Export all response functions
+ */
+module.exports = {
+  // Core functions
+  sendResponse,
+  createResponseBody,
 
-        const responseBody = {
-            statusCode: code,
-            api_ver: process.env.API_VER || 'v1',
-            message: i18n.__(msg)
-        };
+  // Success responses
+  success,
+  created,
+  noContent,
 
-        if (data) 
-            responseBody.data = data;
+  // Client error responses
+  badRequest,
+  unauthorized,
+  forbidden,
+  notFound,
+  disallowed,
+  conflict,
+  validationError,
 
-        return res.status(code).send(responseBody);
-    }
-}
+  // Server error responses
+  exception,
 
+  // Specialized responses
+  custom,
+  redirect,
+  twoFactorEnabled,
 
-
-module.exports = new ResponseHelper;
+  // Constants
+  HTTP_STATUS,
+};

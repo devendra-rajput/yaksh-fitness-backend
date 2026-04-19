@@ -1,5 +1,4 @@
-
-const verificationTemplate = async(otp) => {
+const verificationTemplate = async (otp) => {
   const currentYear = new Date().getFullYear();
   return `
       <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
@@ -33,7 +32,7 @@ const verificationTemplate = async(otp) => {
                         <tr>
                            <td>
                               <div align='center' >
-                                 <img style="text-align; margin-top: 30px; width:80px;" src="cid:brand_logo" alt="Brand Logo">
+                                 <img style="text-align; margin-top: 20px; width:80px;" src="cid:brand_logo" alt="Brand Logo">
                               </div>
                            </td>
                         </tr>
@@ -57,7 +56,7 @@ const verificationTemplate = async(otp) => {
                         </tr>
                         <tr>
                            <td>
-                              <p style="font-family: 'Montserrat', sans-serif;color: #707070;text-align: left;padding: 0px 20px;margin-bottom: 30px;font-size: 14px;line-height: 22px;">Thank you,<br>Elevyn</p>
+                              <p style="font-family: 'Montserrat', sans-serif;color: #707070;text-align: left;padding: 0px 20px;margin-bottom: 30px;font-size: 14px;line-height: 22px;">Thank you,<br>Node JS Boilerplate</p>
                               <p style="font-family: 'Montserrat', sans-serif;color: #707070;text-align: left;padding: 0px 20px;margin-bottom: 30px;font-size: 14px;line-height: 22px;">If you did not make this request or no longer want to complete the signup process, please disregard this message.</p>
                            </td>
                         </tr>
@@ -75,7 +74,7 @@ const verificationTemplate = async(otp) => {
                </tr>
             </table>
          </body>
-      </html>`
-}
+      </html>`;
+};
 
-module.exports = verificationTemplate
+module.exports = verificationTemplate;

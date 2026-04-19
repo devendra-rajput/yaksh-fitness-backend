@@ -1,39 +1,58 @@
-const express = require('express');
-const fs = require('fs');
-const http = require('http');
-const https = require('https');
-const { startCronJob } = require('./utils/cron.utils');
-// const { initSocket } = require('./services/socket');
+/**
+ * Application Entry Point
+ *
+ * Main entry file that initializes and starts the server.
+ * Following functional programming principles:
+ * - Pure functions where possible
+ * - Composition for server setup
+ * - Clear error handling
+ *
+ * @module index
+ */
 
-const app = express();
-let server;
+/**
+ * Load environment variables FIRST before any other imports
+ * This ensures all modules have access to process.env
+ */
+const dotenv = require('dotenv');
 
-// Initial setup
-require('./startup')(app);
-require('./config/v1/mongodb');
-
-app.enable('trust proxy');
-
-// Server configuration
-const port = process.env.APPLICATION_PORT || 8000;
-
-if (process.env.SSL_STATUS === 'true') {
-    const key = fs.readFileSync(process.env.SSL_KEY_PEM_PATH, 'utf8');
-    const cert = fs.readFileSync(process.env.SSL_CERT_PEM_PATH, 'utf8');
-    const options = { key, cert };
-    server = https.createServer(options, app);
-} else {
-    server = http.Server(app);
+try {
+  const env = process.env.NODE_ENV || 'development';
+  dotenv.config({
+    path: `.env.${env}`,
+  });
+  console.log(`✅ Environment loaded: ${env}`);
+} catch (err) {
+  console.error('❌ Error loading .env file:');
+  console.error('Error:', err.message);
+  console.error('Stack:', err.stack);
+  process.exit(1);
 }
 
-// Establish the socket.io connection
-// initSocket(server); 
+// Disable logs if configured
+if (process.env.LOG_DISABLE === 'true') {
+  console.log = function noop() { };
+}
 
-server.listen(port, '0.0.0.0', () => {
-    console.log('listening on port:', port);
+const { createServer } = require('./bootstrap/serverHandlers');
+const { setupProcessHandlers } = require('./bootstrap/processHandlers');
 
-    startCronJob()
+/**
+ * Main application function
+ * Initializes and starts the server
+ */
+const main = async () => {
+  try {
+    // Create and start server
+    const server = await createServer();
 
-});
+    // Setup process handlers for graceful shutdown
+    setupProcessHandlers(server);
+  } catch (error) {
+    console.error('❌ Failed to start application:', error);
+    process.exit(1);
+  }
+};
 
-server.timeout = 300000; // 5 minutes
+// Start the application
+main();

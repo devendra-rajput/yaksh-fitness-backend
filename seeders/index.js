@@ -1,71 +1,178 @@
-// Import required Node.js modules
-const { exec } = require('child_process'); // For executing shell commands
-const { promisify } = require('util');     // To convert callback-based APIs to Promises
+/**
+ * Seeder Runner
+ * Executes all seeder scripts in series or parallel
+ */
 
-// Promisify the exec function to use with async/await
+const { exec } = require('child_process');
+const { promisify } = require('util');
+
 const execAsync = promisify(exec);
 
-// List of script files to execute
-const files = ['admin.js'];
+/**
+ * Seeder configuration
+ */
+const SEEDER_CONFIG = {
+  files: ['admin.js'],
+  timeout: 30000, // 30 seconds timeout per script
+};
 
 /**
- * Run the scripts one after another in series.
- * Each script is executed only after the previous one completes.
+ * Execute a single seeder script
  */
-async function runScriptsInSeries() {
-    try {
-        for (const file of files) {
-            // Execute each script using node and capture the output
-            const { stdout, stderr } = await execAsync(`node seeders/${file}`);
+const executeSeeder = async (filename) => {
+  try {
+    const { stdout, stderr } = await execAsync(
+      `node seeders/${filename}`,
+      { timeout: SEEDER_CONFIG.timeout },
+    );
 
-            // If there's any error output, log it
-            if (stderr) {
-                console.error(`Error in ${file}:`, stderr);
-            } else {
-                // Otherwise, print the standard output
-                console.log(`Output from ${file}:`, stdout);
-            }
-        }
+    return {
+      filename,
+      success: true,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+    };
+  } catch (error) {
+    return {
+      filename,
+      success: false,
+      error: error.message,
+      stdout: error.stdout?.trim() || '',
+      stderr: error.stderr?.trim() || '',
+    };
+  }
+};
 
-        // All scripts have been run
-        console.log('All scripts executed in series.');
-    } catch (err) {
-        // Catch and log any error that occurs during execution
-        console.error('Execution failed:', err);
+/**
+ * Log seeder result
+ */
+const logSeederResult = (result) => {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`📄 Seeder: ${result.filename}`);
+  console.log(`${'='.repeat(60)}`);
+
+  if (result.success) {
+    console.log('✅ Status: Success');
+    if (result.stdout) {
+      console.log('\nOutput:');
+      console.log(result.stdout);
     }
+  } else {
+    console.log('❌ Status: Failed');
+    if (result.error) {
+      console.log(`\nError: ${result.error}`);
+    }
+    if (result.stderr) {
+      console.log('\nError Output:');
+      console.log(result.stderr);
+    }
+  }
+};
+
+/**
+ * Run seeders in series (one after another)
+ */
+const runSeedersInSeries = async (files) => {
+  console.log('🔄 Running seeders in series...\n');
+
+  const results = await files.reduce(async (promiseChain, file) => {
+    const accumulator = await promiseChain;
+    console.log(`⏳ Executing: ${file}...`);
+    const result = await executeSeeder(file);
+    logSeederResult(result);
+    return [...accumulator, result];
+  }, Promise.resolve([]));
+
+  return results;
+};
+
+/**
+ * Run seeders in parallel (all at once)
+ */
+const runSeedersInParallel = async (files) => {
+  console.log('⚡ Running seeders in parallel...\n');
+
+  const promises = files.map((file) => {
+    console.log(`⏳ Starting: ${file}...`);
+    return executeSeeder(file);
+  });
+
+  const results = await Promise.all(promises);
+
+  results.forEach(logSeederResult);
+
+  return results;
+};
+
+/**
+ * Print final summary
+ */
+const printSummary = (results, mode) => {
+  const successful = results.filter((r) => r.success).length;
+  const failed = results.filter((r) => !r.success).length;
+
+  console.log(`\n${'='.repeat(60)}`);
+  console.log('📊 SEEDING SUMMARY');
+  console.log(`${'='.repeat(60)}`);
+  console.log(`Mode: ${mode}`);
+  console.log(`Total Seeders: ${results.length}`);
+  console.log(`✅ Successful: ${successful}`);
+  console.log(`❌ Failed: ${failed}`);
+  console.log(`${'='.repeat(60)}\n`);
+
+  if (failed === 0) {
+    console.log('🎉 All seeders completed successfully!\n');
+  } else {
+    console.log('⚠️  Some seeders failed. Please check the logs above.\n');
+  }
+};
+
+/**
+ * Parse command line arguments
+ */
+const parseOptions = () => {
+  const args = process.argv.slice(2);
+  return {
+    parallel: args.includes('--parallel'),
+  };
+};
+
+/**
+ * Main seeder runner function
+ */
+const runSeeders = async () => {
+  try {
+    const options = parseOptions();
+    const { files } = SEEDER_CONFIG;
+
+    console.log('🌱 Starting database seeding...\n');
+
+    // Run seeders based on mode
+    const results = options.parallel
+      ? await runSeedersInParallel(files)
+      : await runSeedersInSeries(files);
+
+    // Print summary
+    const mode = options.parallel ? 'Parallel' : 'Series';
+    printSummary(results, mode);
+
+    // Exit with appropriate code
+    const hasFailures = results.some((r) => !r.success);
+    process.exit(hasFailures ? 1 : 0);
+  } catch (error) {
+    console.error('❌ Fatal error:', error.message);
+    process.exit(1);
+  }
+};
+
+// Run if executed directly
+if (require.main === module) {
+  runSeeders();
 }
 
 /**
- * Run all scripts at the same time in parallel.
- * This is faster, but not suitable if scripts depend on each other.
+ * Export for testing
  */
-async function runScriptsInParallel() {
-    try {
-        // Map each file to a Promise returned by execAsync
-        const results = await Promise.all(
-            files.map(file => execAsync(`node seeders/${file}`))
-        );
-
-        // Loop through the results and print outputs or errors
-        results.forEach(({ stdout, stderr }, index) => {
-            const file = files[index];
-            if (stderr) {
-                console.error(`Error in ${file}:`, stderr);
-            } else {
-                console.log(`Output from ${file}:`, stdout);
-            }
-        });
-
-        // All scripts have completed
-        console.log('All scripts executed in parallel.');
-    } catch (err) {
-        // Catch and log errors from any failed script
-        console.error('Execution failed:', err);
-    }
-}
-
-// Choose one method to run your seed scripts:
-// Uncomment one of the lines below based on whether you want serial or parallel execution
-
-runScriptsInSeries();     // Run scripts one by one
-// runScriptsInParallel();  // Run scripts simultaneously
+module.exports = {
+  runSeeders,
+};
