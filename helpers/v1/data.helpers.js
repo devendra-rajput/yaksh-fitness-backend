@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const moment = require('moment-timezone');
+const { TOKEN_CONFIG } = require('../../constants/auth');
 
 /**
  * Constants
@@ -82,16 +83,59 @@ const validatePassword = async (passwordString, passwordHash) => (
 );
 
 /**
- * Generate JWT token
+ * Generate a unique JWT ID (jti) for refresh token binding.
+ * Collision probability is negligible at application scale.
+ */
+const generateJti = () => crypto.randomUUID();
+
+/**
+ * Generate a short-lived ACCESS token.
  */
 const generateJWTToken = (data) => {
   try {
     const token = jwt.sign(data, process.env.JWT_TOKEN_KEY, {
-      expiresIn: process.env.JWT_TOKEN_EXPIRY || '30d',
+      expiresIn: TOKEN_CONFIG.accessTokenExpiresIn,
     });
     return token || false;
   } catch (error) {
     console.error('JWT generation error:', error);
+    return false;
+  }
+};
+
+/**
+ * Generate a long-lived REFRESH token.
+ * Includes a unique `jti` so individual tokens can be revoked in Redis
+ * without invalidating other sessions.
+ *
+ * @param {{ user_id: string, role: string }} payload
+ * @returns {{ token: string, jti: string }}
+ */
+const generateRefreshJWTToken = (payload) => {
+  try {
+    const jti = generateJti();
+    const token = jwt.sign(
+      { ...payload, jti, type: 'refresh' },
+      process.env.JWT_REFRESH_KEY || process.env.JWT_TOKEN_KEY,
+      { expiresIn: TOKEN_CONFIG.refreshTokenExpiresIn },
+    );
+    return { token, jti };
+  } catch (error) {
+    console.error('Refresh JWT generation error:', error);
+    return false;
+  }
+};
+
+/**
+ * Verify any JWT token.
+ * @param {string} token
+ * @param {string} [secret]  Defaults to JWT_TOKEN_KEY
+ * @returns {object | false} decoded payload or false
+ */
+const verifyJWTToken = (token, secret = process.env.JWT_TOKEN_KEY) => {
+  try {
+    return jwt.verify(token, secret);
+  } catch {
     return false;
   }
 };
@@ -218,6 +262,9 @@ module.exports = {
   hashPassword,
   validatePassword,
   generateJWTToken,
+  generateRefreshJWTToken,
+  verifyJWTToken,
+  generateJti,
   generateSecureOTP,
 
   // Pagination

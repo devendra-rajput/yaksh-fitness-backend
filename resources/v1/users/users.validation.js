@@ -1,66 +1,135 @@
 /**
  * User Validation Middleware
- * Validates user-related requests using Joi schemas
+ * Validates user-related requests using Joi schemas.
+ *
+ * Pattern: each exported validator is created by the `createValidator` factory.
+ * Custom cross-field checks (password match, strength) are passed as a second argument.
  */
 
 const Joi = require('joi');
 
-// Lazy load dependencies
 const response = require('../../../helpers/v1/response.helpers');
 const dataHelper = require('../../../helpers/v1/data.helpers');
+const {
+  USER_GENDER,
+  FITNESS_GOAL,
+  FITNESS_LEVEL,
+  TRAINING_LOCATION,
+  ACTIVITY_LEVEL,
+} = require('./user.schema');
 
-/**
- * Reusable Joi Schema Components
- */
+/* ─── Reusable Joi primitives ───────────────────────────────────────────── */
+
 const SCHEMAS = Object.freeze({
-  email: Joi.string().email().required(),
+  email: Joi.string().email().lowercase().trim().required(),
   emailOptional: Joi.string().email().optional(),
   password: Joi.string().required(),
-  otp: Joi.number().integer().required(),
-  phoneNumber: Joi.number().optional(),
+  newPassword: Joi.string().min(8).required(),
+  otp: Joi.string().length(6).pattern(/^\d+$/).required().messages({
+    'string.length': 'OTP must be exactly 6 digits',
+    'string.pattern.base': 'OTP must contain only digits',
+  }),
+  phoneNumber: Joi.string().pattern(/^\d+$/).optional(),
   phoneCode: Joi.string().when('phone_number', {
     is: Joi.exist(),
     then: Joi.required(),
     otherwise: Joi.optional(),
   }),
-  firstName: Joi.string().required(),
-  lastName: Joi.string().optional(),
+  firstName: Joi.string().min(1).max(50).trim().required(),
+  lastName: Joi.string().max(50).trim().optional(),
   imageUrl: Joi.string().uri().required(),
   fileName: Joi.string().required(),
   fileType: Joi.string().required(),
   folder: Joi.string().optional(),
-  userId: Joi.string().required(),
+  userId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().messages({
+    'string.pattern.base': 'Invalid user ID format',
+  }),
+  resetToken: Joi.string().required(),
+  refreshToken: Joi.string().required(),
+  googleIdToken: Joi.string().required(),
+  // Onboarding specific
+  fullName: Joi.string().trim().required(),
+  dob: Joi.date().iso().required().custom((value, helpers) => {
+    const minAgeDate = new Date();
+    minAgeDate.setFullYear(minAgeDate.getFullYear() - 10);
+    if (new Date(value) > minAgeDate) {
+      return helpers.message('You must be at least 10 years old to use this application');
+    }
+    return value;
+  }),
+  height: Joi.number().positive().required(),
+  heightUnit: Joi.string().valid('cm', 'ft', 'in').required(),
+  weight: Joi.number().positive().required(),
+  weightUnit: Joi.string().valid('kg', 'lbs').required(),
+  gender: Joi.string().valid(...Object.values(USER_GENDER)).required(),
+  goal: Joi.string().valid(...Object.values(FITNESS_GOAL)).required(),
+  fitnessLevel: Joi.string().valid(...Object.values(FITNESS_LEVEL)).required(),
+  trainingLocation: Joi.string().valid(...Object.values(TRAINING_LOCATION)).required(),
+  equipments: Joi.array().items(Joi.string()).required(),
+  activityLevel: Joi.string().valid(...Object.values(ACTIVITY_LEVEL)).required(),
 });
 
-/**
- * Validation Schemas
- */
+/* ─── Validation schemas ────────────────────────────────────────────────── */
+
 const validationSchemas = Object.freeze({
-  createOne: {
-    first_name: SCHEMAS.firstName,
-    last_name: SCHEMAS.lastName,
+  // Onboarding
+  register: {
     email: SCHEMAS.email,
     password: SCHEMAS.password,
     confirm_password: SCHEMAS.password,
     phone_number: SCHEMAS.phoneNumber,
     phone_code: SCHEMAS.phoneCode,
   },
-  resendOtp: {
-    email: SCHEMAS.email,
-  },
-  verifyOtp: {
+  verifyEmail: {
     email: SCHEMAS.email,
     otp: SCHEMAS.otp,
   },
-  userLogin: {
+  resendOtp: {
+    email: SCHEMAS.email,
+  },
+  onboardingProfile: {
+    full_name: SCHEMAS.fullName,
+    dob: SCHEMAS.dob,
+    height: SCHEMAS.height,
+    height_unit: SCHEMAS.heightUnit,
+    weight: SCHEMAS.weight,
+    weight_unit: SCHEMAS.weightUnit,
+    gender: SCHEMAS.gender,
+  },
+  onboardingGoals: {
+    goal: SCHEMAS.goal,
+    fitness_level: SCHEMAS.fitnessLevel,
+  },
+  onboardingTraining: {
+    training_location: SCHEMAS.trainingLocation,
+    equipments: SCHEMAS.equipments,
+    activity_level: SCHEMAS.activityLevel,
+  },
+  updateProfile: {
+    full_name: SCHEMAS.fullName.optional(),
+    dob: SCHEMAS.dob.optional(),
+    height: SCHEMAS.height.optional(),
+    height_unit: SCHEMAS.heightUnit.optional(),
+    weight: SCHEMAS.weight.optional(),
+    weight_unit: SCHEMAS.weightUnit.optional(),
+    gender: SCHEMAS.gender.optional(),
+    goal: SCHEMAS.goal.optional(),
+    fitness_level: SCHEMAS.fitnessLevel.optional(),
+    training_location: SCHEMAS.trainingLocation.optional(),
+    equipments: SCHEMAS.equipments.optional(),
+    activity_level: SCHEMAS.activityLevel.optional(),
+  },
+
+  // Auth
+  login: {
     email: SCHEMAS.email,
     password: SCHEMAS.password,
   },
-  changePassword: {
-    old_password: SCHEMAS.password,
-    new_password: SCHEMAS.password,
-    confirm_new_password: SCHEMAS.password,
+  refreshToken: {
+    refresh_token: SCHEMAS.refreshToken,
   },
+
+  // Forgot / Reset password
   forgotPassword: {
     email: SCHEMAS.email,
   },
@@ -69,16 +138,24 @@ const validationSchemas = Object.freeze({
     otp: SCHEMAS.otp,
   },
   resetPassword: {
-    password: SCHEMAS.password,
-    confirm_password: SCHEMAS.password,
-    user_id: SCHEMAS.userId,
+    password: SCHEMAS.newPassword,
+    confirm_password: SCHEMAS.newPassword,
+    reset_token: SCHEMAS.resetToken,
   },
-  deleteImage: {
-    image_url: SCHEMAS.imageUrl,
+  changePassword: {
+    old_password: SCHEMAS.password,
+    new_password: SCHEMAS.newPassword,
+    confirm_new_password: SCHEMAS.newPassword,
   },
-  deleteImageAWS: {
-    image_url: SCHEMAS.imageUrl,
+
+  // Google OAuth
+  googleLogin: {
+    id_token: SCHEMAS.googleIdToken,
   },
+
+  // Uploads
+  deleteImage: { image_url: SCHEMAS.imageUrl },
+  deleteImageAWS: { image_url: SCHEMAS.imageUrl },
   generatePresignedUrl: {
     file_name: SCHEMAS.fileName,
     file_type: SCHEMAS.fileType,
@@ -86,185 +163,84 @@ const validationSchemas = Object.freeze({
   },
 });
 
-/**
- * Pure Validation Functions
- */
+/* ─── Pure validation helpers ───────────────────────────────────────────── */
+
+const validatePasswordStrength = (pwd) => dataHelper.checkPasswordRegex(pwd);
+const validatePasswordMatch = (p1, p2) => p1 === p2;
+const validatePasswordsDifferent = (newPwd, oldPwd) => newPwd !== oldPwd;
+
+/* ─── Factory ────────────────────────────────────────────────────────────── */
 
 /**
- * Validate password strength
- */
-const validatePasswordStrength = (password) => dataHelper.checkPasswordRegex(password);
-
-/**
- * Validate password match
- */
-const validatePasswordMatch = (password, confirmPassword) => password === confirmPassword;
-
-/**
- * Validate passwords are different
- */
-const validatePasswordsDifferent = (newPassword, oldPassword) => newPassword !== oldPassword;
-
-/**
- * Validate old password
- */
-const validateOldPassword = async (oldPassword, storedPassword) => (
-  dataHelper.validatePassword(oldPassword, storedPassword)
-);
-
-/**
- * Higher-Order Validation Factory
- */
-
-/**
- * Create validation middleware
- * Factory function that creates validation middleware
+ * Creates an Express middleware that:
+ *  1. Runs Joi schema validation on req.body
+ *  2. Optionally runs a custom async validator
  */
 const createValidator = (schema, customValidation = null) => async (req, res, next) => {
-  // Joi schema validation
   const errors = await dataHelper.joiValidation(req.body, schema);
   if (errors?.length) {
     return response.validationError(errors[0], res, errors);
   }
-
-  // Custom validation if provided
   if (customValidation) {
     const customError = await customValidation(req, res);
-    if (customError) {
-      return response.validationError(customError, res, false);
-    }
+    if (customError) return response.validationError(customError, res, false);
   }
-
-  next();
+  return next();
 };
 
-/**
- * Custom Validation Functions
- */
+/* ─── Custom validators ──────────────────────────────────────────────────── */
 
-/**
- * Validate create user request
- */
-const validateCreateUser = async (req) => {
+const validateRegister = async (req) => {
   const { password, confirm_password } = req.body;
-
-  // Check password strength
-  if (!validatePasswordStrength(password)) {
-    return 'validation.strongPassword';
-  }
-
-  // Check password match
-  if (!validatePasswordMatch(password, confirm_password)) {
-    return 'validation.confirmPasswordNotMatch';
-  }
-
+  if (!validatePasswordStrength(password)) return 'validation.strongPassword';
+  if (!validatePasswordMatch(password, confirm_password)) return 'validation.confirmPasswordNotMatch';
   return null;
 };
 
-/**
- * Validate change password request
- */
-const validateChangePassword = async (req) => {
-  const { old_password, new_password, confirm_new_password } = req.body;
-
-  // Check new password strength
-  if (!validatePasswordStrength(new_password)) {
-    return 'validation.strongPassword';
-  }
-
-  // Check new password match
-  if (!validatePasswordMatch(new_password, confirm_new_password)) {
-    return 'validation.confirmPasswordNotMatch';
-  }
-
-  // Check new and old passwords are different
-  if (!validatePasswordsDifferent(new_password, old_password)) {
-    return 'validation.newAndOldPasswordSame';
-  }
-
-  // Validate old password
-  const isOldPasswordValid = await validateOldPassword(
-    old_password,
-    req.user.password,
-  );
-  if (!isOldPasswordValid) {
-    return 'validation.invalidOldPassword';
-  }
-
-  return null;
-};
-
-/**
- * Validate reset password request
- */
 const validateResetPassword = async (req) => {
   const { password, confirm_password } = req.body;
-
-  // Check password strength
-  if (!validatePasswordStrength(password)) {
-    return 'validation.strongPassword';
-  }
-
-  // Check password match
-  if (!validatePasswordMatch(password, confirm_password)) {
-    return 'validation.confirmPasswordNotMatch';
-  }
-
+  if (!validatePasswordStrength(password)) return 'validation.strongPassword';
+  if (!validatePasswordMatch(password, confirm_password)) return 'validation.confirmPasswordNotMatch';
   return null;
 };
 
-/**
- * Validation Middleware Exports
- */
+const validateChangePassword = async (req) => {
+  const { old_password, new_password, confirm_new_password } = req.body;
+  if (!validatePasswordStrength(new_password)) return 'validation.strongPassword';
+  if (!validatePasswordMatch(new_password, confirm_new_password)) return 'validation.confirmPasswordNotMatch';
+  if (!validatePasswordsDifferent(new_password, old_password)) return 'validation.newAndOldPasswordSame';
+  const isOldPasswordValid = await dataHelper.validatePassword(old_password, req.user.password);
+  if (!isOldPasswordValid) return 'validation.invalidOldPassword';
+  return null;
+};
 
-const createOne = createValidator(
-  validationSchemas.createOne,
-  validateCreateUser,
-);
+/* ─── Exports ────────────────────────────────────────────────────────────── */
 
-const resendOtp = createValidator(validationSchemas.resendOtp);
-
-const verifyOtp = createValidator(validationSchemas.verifyOtp);
-
-const userLogin = createValidator(validationSchemas.userLogin);
-
-const changePassword = createValidator(
-  validationSchemas.changePassword,
-  validateChangePassword,
-);
-
-const forgotPassword = createValidator(validationSchemas.forgotPassword);
-
-const verifyForgotPasswordOTP = createValidator(
-  validationSchemas.verifyForgotPasswordOTP,
-);
-
-const resetPassword = createValidator(
-  validationSchemas.resetPassword,
-  validateResetPassword,
-);
-
-const deleteImage = createValidator(validationSchemas.deleteImage);
-
-const deleteImageAWS = createValidator(validationSchemas.deleteImageAWS);
-
-const generatePresignedUrl = createValidator(
-  validationSchemas.generatePresignedUrl,
-);
-
-/**
- * Export validation middleware
- */
 module.exports = {
-  createOne,
-  resendOtp,
-  verifyOtp,
-  userLogin,
-  changePassword,
-  forgotPassword,
-  verifyForgotPasswordOTP,
-  resetPassword,
-  deleteImage,
-  deleteImageAWS,
-  generatePresignedUrl,
+  // Onboarding
+  register: createValidator(validationSchemas.register, validateRegister),
+  verifyEmail: createValidator(validationSchemas.verifyEmail),
+  resendOtp: createValidator(validationSchemas.resendOtp),
+  onboardingProfile: createValidator(validationSchemas.onboardingProfile),
+  onboardingGoals: createValidator(validationSchemas.onboardingGoals),
+  onboardingTraining: createValidator(validationSchemas.onboardingTraining),
+  updateProfile: createValidator(validationSchemas.updateProfile),
+
+  // Auth
+  login: createValidator(validationSchemas.login),
+  refreshToken: createValidator(validationSchemas.refreshToken),
+
+  // Forgot / Reset password
+  forgotPassword: createValidator(validationSchemas.forgotPassword),
+  verifyForgotPasswordOTP: createValidator(validationSchemas.verifyForgotPasswordOTP),
+  resetPassword: createValidator(validationSchemas.resetPassword, validateResetPassword),
+  changePassword: createValidator(validationSchemas.changePassword, validateChangePassword),
+
+  // Google OAuth
+  googleLogin: createValidator(validationSchemas.googleLogin),
+
+  // Uploads
+  deleteImage: createValidator(validationSchemas.deleteImage),
+  deleteImageAWS: createValidator(validationSchemas.deleteImageAWS),
+  generatePresignedUrl: createValidator(validationSchemas.generatePresignedUrl),
 };

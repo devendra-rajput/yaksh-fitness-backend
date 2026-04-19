@@ -1,10 +1,18 @@
 /**
  * User Schema
- * Mongoose schema definition for User model
+ * Mongoose schema definition for User model.
+ *
+ * Changes vs original:
+ *  - Added `onboarding_step` to track multi-step registration flow
+ *  - OTPs (email & forgot-password) are now stored in Redis, not DB
+ *  - `tokens.refresh_token` array enables multi-device refresh token rotation
+ *  - `google_id` supports Google OAuth sign-in
+ *  - Compound indexes tuned for common query patterns
  */
 
 const mongoose = require('mongoose');
 const leanVirtuals = require('mongoose-lean-virtuals');
+const { ONBOARDING_STEPS } = require('../../../constants/onboarding');
 
 /**
  * User status enum
@@ -13,7 +21,6 @@ const USER_STATUS = Object.freeze({
   INACTIVE: '0',
   ACTIVE: '1',
   BLOCKED: '2',
-  DELETED: '3',
 });
 
 /**
@@ -25,72 +32,144 @@ const USER_ROLES = Object.freeze({
 });
 
 /**
+ * Gender enum
+ */
+const USER_GENDER = Object.freeze({
+  MALE: 'Male',
+  FEMALE: 'Female',
+  NON_BINARY: 'Non-binary',
+  PREFER_NOT_TO_SAY: 'Prefer not to say',
+});
+
+/**
+ * Fitness Goal enum
+ */
+const FITNESS_GOAL = Object.freeze({
+  LOSE_WEIGHT: 'Lose Weight',
+  BUILD_MUSCLE: 'Build Muscle',
+  ENDURANCE: 'Endurance',
+  STAY_ACTIVE: 'Stay Active',
+  FLEXIBILITY: 'Flexibility',
+  SPORT_PERFORMANCE: 'Sport Performance',
+});
+
+/**
+ * Fitness level enum
+ */
+const FITNESS_LEVEL = Object.freeze({
+  BEGINNER: 'Beginner',
+  INTERMEDIATE: 'Intermediate',
+  ADVANCED: 'Advanced',
+});
+
+/**
+ * Training location enum
+ */
+const TRAINING_LOCATION = Object.freeze({
+  GYM: 'Gym',
+  HOME: 'Home',
+  BOTH: 'Both',
+  OUTDOOR: 'Outdoor',
+});
+
+/**
+ * Activity level enum
+ */
+const ACTIVITY_LEVEL = Object.freeze({
+  SEDENTARY: 'Sedentary',
+  LIGHTLY_ACTIVE: 'Lightly Active',
+  MODERATELY_ACTIVE: 'Moderately Active',
+  VERY_ACTIVE: 'Very Active',
+  EXTREMELY_ACTIVE: 'Extremely Active',
+});
+
+/**
  * User Schema Definition
  */
 const UserSchema = new mongoose.Schema(
   {
+    // ── Identity ────────────────────────────────────────────
     email: {
       type: String,
-      required: [true, 'Email is required'],
       lowercase: true,
       trim: true,
-      index: true, // Index for faster queries
+      sparse: true, // allows null for Google-only users without email
+      index: true,
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
-      select: false, // Don't include in queries by default
+      select: false, // excluded from all queries by default
     },
+    google_id: {
+      type: String,
+      default: null,
+      sparse: true,
+      index: true,
+    },
+
+    // ── Profile (Step 3) ────────────────────────────────────
     user_info: {
-      first_name: {
-        type: String,
-        default: '',
-        trim: true,
-      },
-      last_name: {
-        type: String,
-        default: '',
-        trim: true,
-      },
+      first_name: { type: String, default: '', trim: true },
+      last_name: { type: String, default: '', trim: true },
     },
-    phone_code: {
+    dob: { type: String, default: '' },
+    height: { type: Number, default: null },
+    height_unit: { type: String, enum: ['cm', 'ft', 'in'], default: 'cm' },
+    weight: { type: Number, default: null },
+    weight_unit: { type: String, enum: ['kg', 'lbs'], default: 'kg' },
+    gender: {
       type: String,
-      default: '',
-      trim: true,
+      enum: {
+        values: Object.values(USER_GENDER),
+        message: '{VALUE} is not a valid gender'
+      },
+      default: USER_GENDER.PREFER_NOT_TO_SAY
     },
-    phone_number: {
+    phone_code: { type: String, default: '', trim: true },
+    phone_number: { type: String, default: '', trim: true, index: true },
+    profile_picture: { type: String, default: '' },
+
+    // ── Goals (Step 4) ──────────────────────────────────────
+    goal: {
       type: String,
-      default: '',
-      trim: true,
-      index: true, // Index for faster queries
+      enum: {
+        values: Object.values(FITNESS_GOAL),
+        message: '{VALUE} is not a valid fitness goal'
+      },
+      default: FITNESS_GOAL.STAY_ACTIVE
     },
-    profile_picture: {
+    fitness_level: {
       type: String,
-      default: '',
+      enum: {
+        values: Object.values(FITNESS_LEVEL),
+        message: '{VALUE} is not a valid fitness level'
+      },
+      default: FITNESS_LEVEL.INTERMEDIATE
     },
-    tokens: {
-      auth_token: {
-        type: String,
-        default: '',
-        select: false, // Don't include in queries by default
+
+    // ── Training Setup (Step 5) ─────────────────────────────
+    training_location: {
+      type: String,
+      enum: {
+        values: Object.values(TRAINING_LOCATION),
+        message: '{VALUE} is not a valid training location'
       },
-      fcm_token: {
-        type: String,
-        default: '',
-      },
+      default: TRAINING_LOCATION.GYM
     },
-    otp: {
-      email_verification: {
-        type: String,
-        default: '',
-        select: false, // Don't include in queries by default
-      },
-      forgot_password: {
-        type: String,
-        default: '',
-        select: false, // Don't include in queries by default
-      },
+    equipments: {
+      type: [String],
+      default: []
     },
+    activity_level: {
+      type: String,
+      enum: {
+        values: Object.values(ACTIVITY_LEVEL),
+        message: '{VALUE} is not a valid activity level'
+      },
+      default: ACTIVITY_LEVEL.MODERATELY_ACTIVE
+    },
+
+    // ── Status & Role ────────────────────────────────────────
     status: {
       type: String,
       enum: {
@@ -98,7 +177,7 @@ const UserSchema = new mongoose.Schema(
         message: '{VALUE} is not a valid status',
       },
       default: USER_STATUS.ACTIVE,
-      index: true, // Index for faster queries
+      index: true,
     },
     role: {
       type: String,
@@ -107,129 +186,111 @@ const UserSchema = new mongoose.Schema(
         message: '{VALUE} is not a valid role',
       },
       default: USER_ROLES.USER,
-      index: true, // Index for faster queries
+      index: true,
     },
+
+    // ── Verification ─────────────────────────────────────────
     is_email_verified: {
       type: Boolean,
       default: false,
-      index: true, // Index for faster queries
+      index: true,
     },
-    deleted_at: {
+
+    // ── Onboarding ───────────────────────────────────────────
+    onboarding_step: {
       type: String,
-      default: '',
-      index: true, // Index for faster queries
+      enum: Object.values(ONBOARDING_STEPS),
+      default: ONBOARDING_STEPS.REGISTER,
+      index: true,
     },
-  },
-  {
-    timestamps: {
-      createdAt: 'created_at',
-      updatedAt: 'updated_at',
-    },
-    // Optimize JSON output
-    toJSON: {
-      virtuals: true,
-      transform: (doc, ret) => {
-        // Remove sensitive fields from JSON output
-        const sanitized = { ...ret };
-        delete sanitized.password;
-        delete sanitized.__v;
-        return sanitized;
+
+    // ── Tokens ───────────────────────────────────────────────
+    // fcm_token for push notifications; refresh tokens live in Redis.
+    tokens: {
+      fcm_token: { type: String, default: '' },
+      auth_token: {
+        type: String,
+        default: '',
+        select: false,
       },
     },
-    toObject: {
+
+    // ── Soft delete ──────────────────────────────────────────
+    deleted_at: { type: String, default: '', index: true },
+  },
+  {
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    toJSON: {
       virtuals: true,
+      transform: (_doc, ret) => {
+        const out = { ...ret };
+        delete out.password;
+        delete out.__v;
+        return out;
+      },
     },
+    toObject: { virtuals: true },
   },
 );
 
-/**
- * Performance Indexes
- */
-// Compound index for common queries
+// ── Compound Indexes ─────────────────────────────────────────────────────────
 UserSchema.index({ email: 1, deleted_at: 1 });
+UserSchema.index({ google_id: 1, deleted_at: 1 });
 UserSchema.index({ phone_code: 1, phone_number: 1, deleted_at: 1 });
 UserSchema.index({ role: 1, status: 1, deleted_at: 1 });
 
-/**
- * Virtual Properties
- */
-// Full name virtual property
+// ── Virtuals ─────────────────────────────────────────────────────────────────
 UserSchema.virtual('full_name').get(function getFullName() {
-  const firstName = this.user_info?.first_name || '';
-  const lastName = this.user_info?.last_name || '';
-  return `${firstName} ${lastName}`.trim();
+  const first = this.user_info?.first_name || '';
+  const last = this.user_info?.last_name || '';
+  return `${first} ${last}`.trim();
 });
 
-/**
- * Instance Methods
- */
-// Check if user is active
+// ── Instance Methods ──────────────────────────────────────────────────────────
 UserSchema.methods.isActive = function isActive() {
   return this.status === USER_STATUS.ACTIVE && !this.deleted_at;
 };
-
-// Check if user is admin
 UserSchema.methods.isAdmin = function isAdmin() {
   return this.role === USER_ROLES.ADMIN;
 };
 
-/**
- * Query Helpers
- */
-// Find active users
-UserSchema.query.active = function queryActive() {
-  return this.where({
-    status: USER_STATUS.ACTIVE,
-    deleted_at: { $in: [null, '', ' '] },
-  });
+// ── Query Helpers ─────────────────────────────────────────────────────────────
+UserSchema.query.notDeleted = function queryNotDeleted() {
+  return this.where({ deleted_at: { $in: [null, '', ' '] } });
 };
-
-// Find by email (case-insensitive)
+UserSchema.query.active = function queryActive() {
+  return this.where({ status: USER_STATUS.ACTIVE, deleted_at: { $in: [null, '', ' '] } });
+};
 UserSchema.query.byEmail = function queryByEmail(email) {
   return this.where({ email: email.toLowerCase() });
 };
-
-// Find by phone (case-insensitive)
-UserSchema.query.byPhone = function queryByPhone(phoneCode, phoneNumber) {
+UserSchema.query.byPhone = function queryByPhone(code, number) {
   return this.where({
-    phone_code: phoneCode,
-    phone_number: phoneNumber,
+    phone_code: code,
+    phone_number: number,
     status: USER_STATUS.ACTIVE,
     deleted_at: { $in: [null, '', ' '] },
   });
 };
 
-// Find non-deleted users
-UserSchema.query.notDeleted = function queryNotDeleted() {
-  return this.where({
-    deleted_at: { $in: [null, '', ' '] },
-  });
-};
-
-/**
- * Pre-save middleware
- */
-UserSchema.pre('save', async function preSaveHook() {
-  // Only run this logic if the email field was actually changed
-  if (!this.isModified('email')) return;
-
-  if (this.email) {
+// ── Hooks ─────────────────────────────────────────────────────────────────────
+UserSchema.pre('save', function preSaveHook() {
+  if (this.isModified('email') && this.email) {
     this.email = this.email.toLowerCase();
   }
 });
 
-/**
- * Plugin for lean virtuals
- */
 UserSchema.plugin(leanVirtuals);
 
-/**
- * Create and export User model
- */
 const User = mongoose.model('users', UserSchema, 'users');
 
 module.exports = {
   User,
   USER_STATUS,
   USER_ROLES,
+  USER_GENDER,
+  FITNESS_GOAL,
+  FITNESS_LEVEL,
+  TRAINING_LOCATION,
+  ACTIVITY_LEVEL
 };

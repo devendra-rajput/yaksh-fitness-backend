@@ -1,6 +1,14 @@
 /**
  * User Routes
- * Defines all user-related API endpoints
+ *
+ * Defines all user-related API endpoints.
+ * Route groups:
+ *  - Onboarding (public)     POST /register, /resend-otp, /verify-email
+ *  - Auth (public)           POST /login, /refresh-token, /forgot-password, ...
+ *  - Google OAuth (public)   POST /google-login
+ *  - Protected user routes   GET  /profile, POST /change-password, GET /logout, DELETE /
+ *  - Image uploads           POST /upload-image, /upload-bulk-images, /delete-image, ...
+ *  - Admin                   GET  /
  */
 
 const express = require('express');
@@ -8,235 +16,104 @@ const userController = require('../resources/v1/users/users.controller');
 const UserModel = require('../resources/v1/users/users.model');
 const userValidation = require('../resources/v1/users/users.validation');
 const { auth } = require('../middleware/v1/authorize');
-const uploadUtils = require('../utils/upload');
-const aws = require('../services/aws');
+
+/* ─── Route groups ───────────────────────────────────────────────────────── */
 
 /**
- * Upload configuration constants
+ * Task 1 – Onboarding (all public)
  */
-const UPLOAD_CONFIG = {
-  validExtensions: /jpg|jpeg|png|heic/,
-  maxFileSize: 5 * 1024 * 1024, // 5 MB
-  maxBulkFiles: 5,
-};
-
-/**
- * Get upload directory path
- */
-const getUploadDirectory = () => {
-  const date = new Date();
-  return `uploads/${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
-};
-
-/**
- * Create file upload middleware
- */
-const createUploadMiddleware = (directory, fieldName = 'image', isMultiple = false) => {
-  const upload = uploadUtils.uploadFile(
-    UPLOAD_CONFIG.validExtensions,
-    UPLOAD_CONFIG.maxFileSize,
-    directory,
+const createOnboardingRoutes = (router) => {
+  // Step 1: Register new user (profile picture optional)
+  router.post(
+    '/register',
+    [userValidation.register],
+    userController.register,
   );
 
-  return isMultiple
-    ? upload.array(fieldName, UPLOAD_CONFIG.maxBulkFiles)
-    : upload.single(fieldName);
+  // Step 2: Resend email OTP (rate-limited via Redis cooldown)
+  router.post('/resend-otp', [userValidation.resendOtp], userController.resendOtp);
+
+  // Step 3: Verify email OTP → returns token pair
+  router.post('/verify-email', [userValidation.verifyEmail], userController.verifyEmail);
+
+  // Step 4, 5, 6: Protected onboarding steps (requires access token from step 3)
+  router.post('/onboarding/profile', [auth(), userValidation.onboardingProfile], userController.onboardingProfile);
+  router.post('/onboarding/goals', [auth(), userValidation.onboardingGoals], userController.onboardingGoals);
+  router.post('/onboarding/training', [auth(), userValidation.onboardingTraining], userController.onboardingTraining);
+
+  return router;
 };
 
 /**
- * Authentication Routes (Public)
+ * Task 1b / 3 – Auth & Password Management (all public)
  */
 const createAuthRoutes = (router) => {
-  // User registration
-  router.post(
-    '/create',
-    [
-      createUploadMiddleware(getUploadDirectory()),
-      userValidation.createOne,
-    ],
-    userController.createOne,
-  );
+  // Login → returns access + refresh tokens
+  router.post('/login', [userValidation.login], userController.login);
 
-  // Resend OTP
-  router.post(
-    '/resend-otp',
-    [userValidation.resendOtp],
-    userController.resendOtp,
-  );
+  // Refresh token rotation
+  router.post('/refresh-token', [userValidation.refreshToken], userController.refreshToken);
 
-  // Verify OTP
-  router.post(
-    '/verify',
-    [userValidation.verifyOtp],
-    userController.verifyOtp,
-  );
-
-  // User login
-  router.post(
-    '/login',
-    [userValidation.userLogin],
-    userController.userLogin,
-  );
-
-  // Forgot password
-  router.post(
-    '/forgot-password',
-    [userValidation.forgotPassword],
-    userController.forgotPassword,
-  );
-
-  // Verify forgot password OTP
-  router.post(
-    '/forgot-password/verify-otp',
-    [userValidation.verifyForgotPasswordOTP],
-    userController.verifyForgotPasswordOTP,
-  );
-
-  // Reset password
-  router.post(
-    '/reset-password',
-    [userValidation.resetPassword],
-    userController.resetPassword,
-  );
+  // Forgot password flow
+  router.post('/forgot-password', [userValidation.forgotPassword], userController.forgotPassword);
+  router.post('/forgot-password/verify-otp', [userValidation.verifyForgotPasswordOTP], userController.verifyForgotPasswordOTP);
+  router.post('/reset-password', [userValidation.resetPassword], userController.resetPassword);
 
   return router;
 };
 
 /**
- * Protected User Routes
+ * Task 4 – Google OAuth (public)
+ */
+const createGoogleRoutes = (router) => {
+  router.post('/google-login', [userValidation.googleLogin], userController.googleLogin);
+  return router;
+};
+
+/**
+ * Protected – requires valid access token
  */
 const createProtectedUserRoutes = (router) => {
-  // Get user profile
-  router.get(
-    '/profile',
-    [auth()],
-    userController.getUserProfile,
-  );
-
-  // Change password
-  router.post(
-    '/change-password',
-    [auth(), userValidation.changePassword],
-    userController.changePassword,
-  );
-
-  // Logout
-  router.get(
-    '/logout',
-    [auth()],
-    userController.logout,
-  );
-
-  // Delete account
-  router.delete(
-    '/',
-    [auth()],
-    userController.deleteOne,
-  );
-
+  router.get('/profile', [auth()], userController.getUserProfile);
+  router.put('/profile', [auth(), userValidation.updateProfile], userController.updateProfile);
+  router.post('/change-password', [auth(), userValidation.changePassword], userController.changePassword);
+  router.get('/logout', [auth()], userController.logout);
+  router.delete('/', [auth()], userController.deleteOne);
   return router;
 };
 
 /**
- * Image Upload Routes
+ * Image upload routes (protected)
  */
 const createImageUploadRoutes = (router) => {
-  const uploadDir = getUploadDirectory();
-
-  // Upload single image (local)
-  router.post(
-    '/upload-image',
-    [
-      auth(),
-      createUploadMiddleware(uploadDir),
-    ],
-    userController.uploadImage,
-  );
-
-  // Upload multiple images (local)
-  router.post(
-    '/upload-bulk-images',
-    [
-      auth(),
-      uploadUtils.setMaxFileLimit(UPLOAD_CONFIG.maxBulkFiles),
-      createUploadMiddleware(uploadDir, 'images', true),
-    ],
-    userController.uploadBulkImages,
-  );
-
-  // Delete image
-  router.post(
-    '/delete-image',
-    [userValidation.deleteImage],
-    userController.deleteImage,
-  );
+  // AWS S3
+  router.post('/delete-image-aws', [userValidation.deleteImageAWS], userController.deleteImageAWS);
+  router.post('/generate-aws-presigned-url', [auth(), userValidation.generatePresignedUrl], userController.generatePresignedUrl);
 
   return router;
 };
 
 /**
- * AWS S3 Upload Routes
- */
-const createAWSUploadRoutes = (router) => {
-  // Upload image to AWS S3
-  router.post(
-    '/upload-image-aws',
-    [
-      auth(),
-      createUploadMiddleware('uploads/temp'),
-      aws.uploadFile,
-    ],
-    userController.uploadImageAWS,
-  );
-
-  // Delete image from AWS S3
-  router.post(
-    '/delete-image-aws',
-    [userValidation.deleteImageAWS],
-    userController.deleteImageAWS,
-  );
-
-  // Generate AWS presigned URL
-  router.post(
-    '/generate-aws-presigned-url',
-    [auth(), userValidation.generatePresignedUrl],
-    userController.generatePresignedUrl,
-  );
-
-  return router;
-};
-
-/**
- * Admin Routes
+ * Admin-only routes
  */
 const createAdminRoutes = (router) => {
-  // Get all users with pagination
-  router.get(
-    '/',
-    [auth(UserModel.roles.ADMIN)],
-    userController.getAllWithPagination,
-  );
-
+  router.get('/', [auth(UserModel.roles.ADMIN)], userController.getAllWithPagination);
   return router;
 };
 
-/**
- * Initialize all user routes
- */
+/* ─── Initialise ─────────────────────────────────────────────────────────── */
+
 const initializeUserRoutes = () => {
   const router = express.Router();
 
-  // Register route groups
+  createOnboardingRoutes(router);
   createAuthRoutes(router);
+  createGoogleRoutes(router);
   createProtectedUserRoutes(router);
   createImageUploadRoutes(router);
-  createAWSUploadRoutes(router);
   createAdminRoutes(router);
 
   return router;
 };
 
-/**
- * Export configured router
- */
 module.exports = initializeUserRoutes();
