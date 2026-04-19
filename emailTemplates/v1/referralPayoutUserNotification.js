@@ -1,0 +1,80 @@
+
+const referralPayoutUserNotificationTemplate = async (userName, amount, currentYear) => {
+    return `
+        <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+        <html xmlns="http://www.w3.org/1999/xhtml">
+           <head>
+              <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+              <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;0,900;1,300;1,400;1,500;1,700&display=swap" rel="stylesheet">
+              <title>Referral Payout Successful</title>
+              <style type="text/css">
+                 a {
+                    text-decoration: none;
+                    outline: none;
+                 }
+                 .container {
+                    box-shadow: 0px 0px 6px 0px #ccc;
+                 }
+                 body {
+                    font-family: 'Roboto', sans-serif;
+                 }
+              </style>
+           </head>
+           <body>
+              <table cellpadding="0" width="650" class="container" align="center" cellspacing="0" border="0">
+                 <tr>
+                    <td>
+                       <table cellpadding="0" width="650" class="container" align="center" cellspacing="0" border="0">
+                          <tr style="background-color: #ee4d29 !important; height: 50px;">
+                             <td></td>
+                          </tr>
+                          <tr>
+                             <td>
+                                <div align='center'>
+                                   <img style="text-align: center; margin-top: 30px; width:80px;" src="cid:brand_logo" alt="Brand Logo">
+                                </div>
+                             </td>
+                          </tr>
+                          <tr height="40">
+                             <td>
+                                <p style="font-family: 'Montserrat', sans-serif; font-weight: bold; color: #000; font-size: 20px; text-align: center;">Referral Payout Successful</p>
+                             </td>
+                          </tr>
+                          <tr>
+                             <td>
+                                <p style="font-family: 'Montserrat', sans-serif; color: #707070; text-align: left; padding: 0px 20px; font-size: 14px; line-height: 22px;">Hello ${userName},</p>
+                                <p style="font-family: 'Montserrat', sans-serif; color: #707070; text-align: left; padding: 0px 20px; font-size: 14px; line-height: 22px;">
+                                   We are pleased to inform you that your referral payout of <strong style="color: #ee4d29;">$${amount.toFixed(2)}</strong> has been successfully transferred to your connected Stripe account.
+                                </p>
+                                <p style="font-family: 'Montserrat', sans-serif; color: #707070; text-align: left; padding: 0px 20px; font-size: 14px; line-height: 22px;">
+                                   Thank you for being a part of Elevyn and sharing it with others!
+                                </p>
+                             </td>
+                          </tr>
+                          <tr>
+                             <td>
+                                <p style="font-family: 'Montserrat', sans-serif; color: #707070; text-align: left; padding: 0px 20px; margin-bottom: 30px; font-size: 14px; line-height: 22px;">
+                                   Best regards,<br>Elevyn Team
+                                </p>
+                             </td>
+                          </tr>
+                          <tr style="background-color: #ee4d29;">
+                             <td>
+                                <div>
+                                   <p class="sub center" style="color:#FFFFFF; text-align:center; width:100%; font-size: 16px; font-weight: 600;">
+                                      © ${currentYear} Elevyn
+                                   </p>
+                                </div>
+                             </td>
+                          </tr>
+                       </table>
+                    </td>
+                 </tr>
+              </table>
+           </body>
+        </html>
+    `;
+}
+
+module.exports = referralPayoutUserNotificationTemplate;

@@ -1,0 +1,50 @@
+{
+    "success": {
+        "userProfile": "Perfil de usuario",
+        "noRecordsFound": "No se encontraron registros",
+        "usersData": "Datos de usuarios",
+        "fileUploaded": "Archivo subido con éxito",
+        "fileDeleted": "Archivo eliminado con éxito"
+    },
+    "error": {
+        "userNotFound": "Usuario no encontrado",
+        "serverError": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo más tarde.",
+        "emailExist": "Ya existe un usuario con este correo electrónico",
+        "invalidEmail": "Correo electrónico inválido",
+        "invalidOtp": "OTP inválido",
+        "emailAlreadyVerified": "El correo electrónico ya está verificado",
+        "invalidFileType": "Error: Tipo de archivo inválido",
+        "fileNotUploaded": "Archivo no subido",
+        "tooManyFilesUploaded": "Se subieron demasiados archivos",
+        "multerError": "Ocurrió un error de Multer",
+        "internalServerError": "Error Interno del Servidor",
+        "maxFileLimit": "Puedes subir un máximo de {{ maxFileCount }} imágenes.",
+        "invalidFileUrlToDelete": "URL inválida o error al eliminar el archivo",
+        "fileNotFound": "Archivo no encontrado"
+    },
+    "validation": {
+        "strongPassword": "Por favor, elige una contraseña segura"
+    },
+    "auth": {
+        "loginFailed": "Inicio de sesión fallido. Por favor, verifica tus credenciales",
+        "tokenExpired": "Tu sesión ha expirado. Por favor, inicia sesión nuevamente",
+        "emailCodeSent": "Se ha enviado un código de verificación a tu correo electrónico",
+        "emailCodeSentWithOtp": "Se ha enviado un código de verificación a tu correo electrónico. Código de verificación - {{ code }}",
+        "otpVerified": "OTP verificado con éxito",
+        "invalidCredentails": "Credenciales inválidas",
+        "loggedIn": "Sesión iniciada con éxito",
+        "unauthorizedRequest": "Solicitud no autorizada",
+        "tokenMismatch": "Token no coincide, solicitud no autorizada",
+        "unauthorizedRole": "No estás autorizado para procesar esta solicitud",
+        "accountBlocked": "Tu cuenta ha sido eliminada o bloqueada por el administrador. Por favor, contacta con {{ supportEmail }} para restaurar tu cuenta"
+    },
+    "socket": {
+        "noToken": "Error de autenticación: No se proporcionó token",
+        "noUserFound": "Error de autenticación: Usuario no encontrado",
+        "invalidToken": "Error de autenticación: Token inválido",
+        "tokenMismatch": "Error de autenticación: Token no coincide, solicitud no autorizada",
+        "serverError": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo más tarde.",
+        "keySaved": "Clave configurada con éxito",
+        "testEvent": "Evento de prueba"
+    }
+}
