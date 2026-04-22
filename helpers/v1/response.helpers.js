@@ -43,21 +43,10 @@ const createResponseBody = (statusCode, message, data = null) => {
 };
 
 /**
- * Set CORS headers on response
- */
-const setCORSHeaders = (res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,PATCH,POST,DELETE,OPTIONS');
-  return res;
-};
-
-/**
  * Send HTTP response
  */
 const sendResponse = (statusCode, message, res, data = null) => {
   const body = createResponseBody(statusCode, message, data);
-  setCORSHeaders(res);
   return res.status(statusCode).send(body);
 };
 
@@ -103,14 +92,11 @@ const redirect = (url, res) => res.status(HTTP_STATUS.MOVED_TEMPORARILY).send({
 /**
  * Send two-factor authentication enabled response
  */
-const twoFactorEnabled = (res) => {
-  setCORSHeaders(res);
-  return res.status(HTTP_STATUS.OK).send({
-    api_ver: process.env.API_VER || 'v1',
-    message: i18n.__('auth.twoFactorEnabled'),
-    two_factor: true,
-  });
-};
+const twoFactorEnabled = (res) => res.status(HTTP_STATUS.OK).send({
+  api_ver: process.env.API_VER || 'v1',
+  message: i18n.__('auth.twoFactorEnabled'),
+  two_factor: true,
+});
 
 /**
  * Export all response functions

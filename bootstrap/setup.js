@@ -18,6 +18,7 @@ const { connectDB } = require('../config/v1/mongodb');
 const { connectRedis } = require('../config/v1/redis');
 const rateLimiterMiddleware = require('../middleware/rateLimiter');
 const timezoneMiddleware = require('../middleware/timezone');
+const requestIdMiddleware = require('../middleware/requestId');
 const errorMiddleware = require('../middleware/error');
 const { logger } = require('../utils/logger');
 const { validateEnvironment: validateEnv } = require('../utils/envValidator');
@@ -26,29 +27,36 @@ const { validateEnvironment: validateEnv } = require('../utils/envValidator');
  * Validate environment variables
  */
 const setupEnvironmentValidation = () => {
-  console.log('📋 Validating environment variables...');
+  logger.info('Validating environment variables...');
   validateEnv();
-  console.log('✅ Environment validation passed');
+  logger.info('Environment validation passed');
 };
 
 /**
  * Connect to databases
  */
 const setupDatabases = async () => {
-  console.log('🔌 Connecting to MongoDB...');
+  logger.info('Connecting to MongoDB...');
   await connectDB();
-  console.log('✅ MongoDB connected');
+  logger.info('MongoDB connected');
 
-  console.log('🔌 Connecting to Redis...');
+  logger.info('Connecting to Redis...');
   await connectRedis();
-  console.log('✅ Redis connected\n');
+  logger.info('Redis connected');
+};
+
+/**
+ * Attach a unique request ID before any other middleware runs.
+ */
+const setupRequestId = (app) => {
+  app.use(requestIdMiddleware);
 };
 
 /**
  * Setup body parsers
  */
 const setupBodyParsers = (app) => {
-  console.log('📦 Setting up body parsers...');
+  logger.info('Setting up body parsers...');
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json({ limit: '50mb' }));
 };
@@ -57,7 +65,7 @@ const setupBodyParsers = (app) => {
  * Setup CORS configuration
  */
 const setupCORS = (app) => {
-  console.log('🌐 Setting up CORS...');
+  logger.info('Setting up CORS...');
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -86,7 +94,7 @@ const setupCORS = (app) => {
  * Setup security headers
  */
 const setupSecurity = (app) => {
-  console.log('🔒 Setting up security headers...');
+  logger.info('Setting up security headers...');
   app.use(helmet());
   app.set('trust proxy', 'loopback');
 };
@@ -95,7 +103,7 @@ const setupSecurity = (app) => {
  * Setup internationalization
  */
 const setupI18n = (app) => {
-  console.log('🌍 Setting up i18n...');
+  logger.info('Setting up i18n...');
   app.use(i18n.init);
 };
 
@@ -103,7 +111,7 @@ const setupI18n = (app) => {
  * Setup middleware
  */
 const setupMiddleware = (app) => {
-  console.log('⚙️  Setting up middleware...');
+  logger.info('Setting up middleware...');
   app.use(timezoneMiddleware);
   app.use(rateLimiterMiddleware);
 };
@@ -113,12 +121,13 @@ const setupMiddleware = (app) => {
  */
 const setupRequestLogging = (app) => {
   if (process.env.LOG_DISABLE === 'false') {
-    console.log('📝 Setting up request logging...');
+    logger.info('Setting up request logging...');
     app.use((req, res, next) => {
-      console.log('Incoming request', {
+      logger.info('Incoming request', {
         method: req.method,
         url: req.url,
         ip: req.ip,
+        requestId: req.id,
         timezone: req.timezone,
         userAgent: req.get('User-Agent'),
       });
@@ -131,7 +140,7 @@ const setupRequestLogging = (app) => {
  * Setup static file serving
  */
 const setupStaticFiles = (app) => {
-  console.log('📁 Setting up static file serving...');
+  logger.info('Setting up static file serving...');
   app.use('/public', express.static('public'));
   app.use('/uploads', express.static('uploads'));
 };
@@ -140,7 +149,7 @@ const setupStaticFiles = (app) => {
  * Setup view engine (EJS)
  */
 const setupViewEngine = (app) => {
-  console.log('🎨 Setting up view engine...');
+  logger.info('Setting up view engine...');
   app.set('view engine', 'ejs');
   app.use(expressLayouts);
   app.set('layout', 'layout');
@@ -151,7 +160,7 @@ const setupViewEngine = (app) => {
  * Setup Swagger documentation
  */
 const setupSwagger = (app) => {
-  console.log('📚 Setting up Swagger documentation...');
+  logger.info('Setting up Swagger documentation...');
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 };
 
@@ -159,16 +168,16 @@ const setupSwagger = (app) => {
  * Setup application routes
  */
 const setupApplicationRoutes = async (app) => {
-  console.log('🛣️  Setting up routes...');
+  logger.info('Setting up routes...');
   await setupRoutes(app);
-  console.log('✅ Routes configured');
+  logger.info('Routes configured');
 };
 
 /**
  * Setup error handling middleware
  */
 const setupErrorHandling = (app) => {
-  console.log('❌ Setting up error handling...');
+  logger.info('Setting up error handling...');
   app.use(errorMiddleware);
 };
 
@@ -176,7 +185,7 @@ const setupErrorHandling = (app) => {
  * Main application setup function
  */
 const setupApplication = async (app) => {
-  console.log('🚀 Starting application bootstrap...\n');
+  logger.info('Starting application bootstrap...');
 
   try {
     // Step 1: Validate environment
@@ -185,44 +194,45 @@ const setupApplication = async (app) => {
     // Step 2: Connect to databases
     await setupDatabases();
 
-    // Step 3: Setup body parsers
+    // Step 3: Attach request ID (must be before all other middleware)
+    setupRequestId(app);
+
+    // Step 4: Setup body parsers
     setupBodyParsers(app);
 
-    // Step 4: Setup CORS
+    // Step 5: Setup CORS
     setupCORS(app);
 
-    // Step 5: Setup security
+    // Step 6: Setup security
     setupSecurity(app);
 
-    // Step 6: Setup i18n
+    // Step 7: Setup i18n
     setupI18n(app);
 
-    // Step 7: Setup middleware
+    // Step 8: Setup middleware
     setupMiddleware(app);
 
-    // Step 8: Setup request logging
+    // Step 9: Setup request logging
     setupRequestLogging(app);
 
-    // Step 9: Setup static files
+    // Step 10: Setup static files
     setupStaticFiles(app);
 
-    // Step 10: Setup view engine
+    // Step 11: Setup view engine
     setupViewEngine(app);
 
-    // Step 11: Setup Swagger
+    // Step 12: Setup Swagger
     setupSwagger(app);
 
-    // Step 12: Setup routes
+    // Step 13: Setup routes
     await setupApplicationRoutes(app);
 
-    // Step 13: Setup error handling (must be last)
+    // Step 14: Setup error handling (must be last)
     setupErrorHandling(app);
 
-    console.log('\n✅ Application bootstrap completed successfully!\n');
+    logger.info('Application bootstrap completed successfully!');
   } catch (error) {
-    console.log('\n❌ Application bootstrap failed:');
-    console.log('Error:', error.message);
-    console.log('Stack:', error.stack);
+    logger.error('Application bootstrap failed', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 };

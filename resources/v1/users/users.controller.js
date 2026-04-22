@@ -24,6 +24,7 @@ const otpHelper = require('../../../helpers/v1/otp.helpers');
 const UserModel = require('./users.model');
 const { ONBOARDING_STEPS } = require('../../../constants/onboarding');
 const { TOKEN_CONFIG } = require('../../../constants/auth');
+const { logger } = require('../../../utils/logger');
 
 // Lazy-loaded services
 const getNodemailer = () => require('../../../services/nodemailer'); // eslint-disable-line global-require
@@ -57,7 +58,7 @@ const deleteLocalFile = (fileUrl) => {
     }
     return false;
   } catch (error) {
-    console.error('deleteLocalFile Error:', error.message);
+    logger.error('deleteLocalFile Error', { error: error.message });
     return false;
   }
 };
@@ -68,7 +69,7 @@ const deleteLocalFile = (fileUrl) => {
 const sendEmailAsync = (email, subject, html) => {
   const nodemailer = getNodemailer();
   nodemailer.sendMail(email, subject, html).catch((err) => {
-    console.error('sendEmailAsync Error:', err.message);
+    logger.error('sendEmailAsync Error', { email, subject, error: err.message });
   });
 };
 
@@ -537,14 +538,14 @@ const changePassword = async (req, res) => {
  *  4. If no existing user → create new account
  */
 const googleLogin = async (req, res) => {
-  const { id_token } = req.body;
+  const { access_token } = req.body;
 
   if (!process.env.GOOGLE_CLIENT_ID) {
     return response.exception('error.googleNotConfigured', res, false);
   }
 
   const googleService = getGoogleService();
-  const googlePayload = await googleService.verifyIdToken(id_token);
+  const googlePayload = await googleService.getUserInfo(access_token);
   if (!googlePayload) {
     return response.badRequest('error.invalidGoogleToken', res, false);
   }
@@ -579,7 +580,7 @@ const googleLogin = async (req, res) => {
       user_info: { first_name: firstName, last_name: lastName },
       profile_picture: picture || '',
       is_email_verified: !!emailVerified,
-      onboarding_step: ONBOARDING_STEPS.COMPLETE,
+      onboarding_step: ONBOARDING_STEPS.PROFILE,
       // No password – Google-only account
     };
 
@@ -701,7 +702,7 @@ const generatePresignedUrl = async (req, res) => {
     if (!result) return response.badRequest('error.serverError', res, false);
     return response.success('success.presignedUrlGenerated', res, result);
   } catch (error) {
-    console.log('Error in generatePresignedUrl:', error);
+    logger.error('generatePresignedUrl Error', { error: error.message });
     return response.exception('error.serverError', res, null);
   }
 };

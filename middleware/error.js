@@ -5,6 +5,7 @@
 
 const multer = require('multer');
 const i18n = require('../config/i18n');
+const { logger } = require('../utils/logger');
 
 /**
  * Error types classification
@@ -85,7 +86,7 @@ const errorHandler = (err, req, res, _next) => {
   // Log programming errors (5xx) only
   if (errorType === ERROR_TYPES.PROGRAMMING) {
     const errorLog = createErrorLog(err, req);
-    console.error('Server Error:', JSON.stringify(errorLog, null, 2));
+    logger.error('Server Error', errorLog);
   }
 
   // Handle Multer errors

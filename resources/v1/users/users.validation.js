@@ -150,7 +150,7 @@ const validationSchemas = Object.freeze({
 
   // Google OAuth
   googleLogin: {
-    id_token: SCHEMAS.googleIdToken,
+    access_token: Joi.string().required(),
   },
 
   // Uploads

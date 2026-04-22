@@ -11,6 +11,7 @@
 
 const { User, USER_STATUS, USER_ROLES } = require('./user.schema');
 const { ONBOARDING_STEPS } = require('../../../constants/onboarding');
+const { logger } = require('../../../utils/logger');
 
 // eslint-disable-next-line global-require
 const getDataHelper = () => require('../../../helpers/v1/data.helpers');
@@ -48,10 +49,10 @@ const createOne = async (data) => {
     if (!data) throw new Error('Data is required');
     const user = await User.create(data);
     if (!user) return false;
-    invalidateUserListCache().catch(() => {});
+    invalidateUserListCache().catch((err) => logger.warn('Cache invalidation failed', { error: err.message }));
     return user;
   } catch (error) {
-    console.error('UserModel@createOne Error:', error.message);
+    logger.error('UserModel@createOne Error', { error: error.message });
     return false;
   }
 };
@@ -72,7 +73,7 @@ const getOneByColumnNameAndValue = async (columnName, columnValue, includeSensit
     const result = await qb.lean({ virtuals: true });
     return result || false;
   } catch (error) {
-    console.error('UserModel@getOneByColumnNameAndValue Error:', error.message);
+    logger.error('UserModel@getOneByColumnNameAndValue Error', { error: error.message });
     return false;
   }
 };
@@ -86,7 +87,7 @@ const getOneByGoogleId = async (googleId) => {
     const result = await User.findOne(query).lean({ virtuals: true });
     return result || false;
   } catch (error) {
-    console.error('UserModel@getOneByGoogleId Error:', error.message);
+    logger.error('UserModel@getOneByGoogleId Error', { error: error.message });
     return false;
   }
 };
@@ -98,7 +99,7 @@ const getOneByPhoneCodeAndNumber = async (phoneCode, phoneNumber, includeSensiti
     const result = await qb.lean();
     return result || false;
   } catch (error) {
-    console.error('UserModel@getOneByPhoneCodeAndNumber Error:', error.message);
+    logger.error('UserModel@getOneByPhoneCodeAndNumber Error', { error: error.message });
     return false;
   }
 };
@@ -110,7 +111,7 @@ const isUserExist = async (columnName, columnValue, excludeUserId = false) => {
     const count = await User.countDocuments(query).collation(COMMON_QUERIES.collation);
     return count > 0;
   } catch (error) {
-    console.error('UserModel@isUserExist Error:', error.message);
+    logger.error('UserModel@isUserExist Error', { error: error.message });
     return false;
   }
 };
@@ -120,10 +121,10 @@ const updateOne = async (id, data) => {
     if (!id || !data) throw new Error('ID and data are required');
     const user = await User.findByIdAndUpdate(id, data, { new: true, lean: true });
     if (!user) return false;
-    invalidateUserListCache().catch(() => {});
+    invalidateUserListCache().catch((err) => logger.warn('Cache invalidation failed', { error: err.message }));
     return user;
   } catch (error) {
-    console.error('UserModel@updateOne Error:', error.message);
+    logger.error('UserModel@updateOne Error', { error: error.message });
     return false;
   }
 };
@@ -132,10 +133,10 @@ const deleteOne = async (id) => {
   try {
     const result = await User.deleteOne({ _id: id });
     if (!result || result.deletedCount === 0) return false;
-    invalidateUserListCache().catch(() => {});
+    invalidateUserListCache().catch((err) => logger.warn('Cache invalidation failed', { error: err.message }));
     return result;
   } catch (error) {
-    console.error('UserModel@deleteOne Error:', error.message);
+    logger.error('UserModel@deleteOne Error', { error: error.message });
     return false;
   }
 };
@@ -173,10 +174,10 @@ const getAllWithPagination = async (page, limit, filterObj = {}) => {
       },
     };
 
-    redis.setKey(cacheKey, result).catch(() => {});
+    redis.setKey(cacheKey, result).catch((err) => logger.warn('Cache set failed', { cacheKey, error: err.message }));
     return result;
   } catch (error) {
-    console.error('UserModel@getAllWithPagination Error:', error.message);
+    logger.error('UserModel@getAllWithPagination Error', { error: error.message });
     return false;
   }
 };

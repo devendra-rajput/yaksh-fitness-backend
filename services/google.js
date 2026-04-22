@@ -59,4 +59,32 @@ const verifyIdToken = async (idToken) => {
   }
 };
 
-module.exports = { verifyIdToken };
+/**
+ * Verify a Google access_token by calling Google's userinfo endpoint and return
+ * the same payload shape as verifyIdToken so callers are interchangeable.
+ *
+ * @param {string} accessToken - The OAuth2 access token from the frontend
+ */
+const getUserInfo = async (accessToken) => {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data.sub) return false;
+    return {
+      googleId: data.sub,
+      email: data.email || null,
+      emailVerified: !!data.email_verified,
+      firstName: data.given_name || '',
+      lastName: data.family_name || '',
+      picture: data.picture || '',
+    };
+  } catch (error) {
+    console.error('GoogleService@getUserInfo Error:', error.message);
+    return false;
+  }
+};
+
+module.exports = { verifyIdToken, getUserInfo };
