@@ -89,16 +89,16 @@ const SetRepRecommendationSchema = new mongoose.Schema(
       enum: Object.values(EXERCISE_DIFFICULTY),
       required: true,
     },
-    sets: { type: String, default: '3' },           // e.g. "3-4"
-    reps: { type: String, default: '8-12' },        // e.g. "8-12" or "30s"
+    sets: { type: String, default: '3' }, // e.g. "3-4"
+    reps: { type: String, default: '8-12' }, // e.g. "8-12" or "30s"
     rest_seconds: { type: Number, default: 60 },
     weight_unit: {
       type: String,
       enum: ['lbs', 'kg', 'bodyweight', 'none'],
       default: 'lbs',
     },
-    weight_range: { type: String, default: '' },    // e.g. "30-50"
-    tempo: { type: String, default: '' },           // e.g. "2-0-2-0"
+    weight_range: { type: String, default: '' }, // e.g. "30-50"
+    tempo: { type: String, default: '' }, // e.g. "2-0-2-0"
   },
   { _id: false },
 );
@@ -113,14 +113,14 @@ const ExerciseSchema = new mongoose.Schema(
       required: [true, 'Exercise title is required'],
       trim: true,
       maxlength: [120, 'Title cannot exceed 120 characters'],
-      index: true,          // text search via title prefix
+      index: true, // text search via title prefix
     },
     slug: {
       type: String,
       lowercase: true,
       trim: true,
       unique: true,
-      sparse: true,         // allows exercises without slugs during seeding
+      sparse: true, // allows exercises without slugs during seeding
     },
     description: { type: String, default: '' },
     instructions: { type: [String], default: [] },
@@ -200,6 +200,34 @@ const ExerciseSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ── Anatomical Muscles (from Excel Primary/Secondary Muscles columns) ───────
+    // Granular muscle names used for the Target Muscles filter UI.
+    // Covers muscles that don't map 1-to-1 to a muscle group folder:
+    //   Glutes, Hamstrings, Quadriceps, Calves, Adductors,
+    //   Obliques, Lower Back, Trapezius, etc.
+    primary_muscles: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    secondary_muscles: {
+      type: [String],
+      default: [],
+    },
+
+    // ── Workout Location ─────────────────────────────────────────────────────
+    // Derived from equipment_category at seed time. Enables location-based
+    // filtering without a join: "Home Gym" → home_gym, etc.
+    //   no_equipment  → bodyweight only
+    //   home_gym      → bodyweight + resistance bands + free weights
+    //   small_gym     → above + machines
+    //   large_gym     → all equipment (no restriction)
+    workout_location: {
+      type: [{ type: String, enum: ['no_equipment', 'home_gym', 'small_gym', 'large_gym'] }],
+      default: [],
+      index: true,
+    },
+
     // ── Quick-filter Boolean Flags ────────────────────────────────────────────
     is_bodyweight: {
       type: Boolean,
@@ -209,6 +237,62 @@ const ExerciseSchema = new mongoose.Schema(
     is_unilateral: {
       type: Boolean,
       default: false,
+    },
+
+    // ── Workout Builder v4.0 Fields ───────────────────────────────────────────
+    // Rule 4.3 — movement pattern for Full Body coverage enforcement
+    movement_pattern: {
+      type: String,
+      enum: ['squat', 'hinge', 'horizontal_push', 'horizontal_pull', 'vertical_push', 'vertical_pull', 'core', null],
+      default: null,
+    },
+    // Rule 7/8 — stretch subtype distinguishes dynamic (warm-up) from static (cool-down)
+    subtype: {
+      type: String,
+      enum: ['dynamic', 'static', null],
+      default: null,
+    },
+    // Rule 27.3 — CNS load score 1-5 (1=easy, 5=max demand); default 3 (medium)
+    cns_load: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: 3,
+    },
+    // Rule 12 — staple compounds (squat, deadlift, bench, etc.) may repeat across 48h
+    is_staple_compound: {
+      type: Boolean,
+      default: false,
+    },
+    // Rule 27.1 — spinal-loaded compounds count toward per-session spinal cap
+    is_spinal_loaded: {
+      type: Boolean,
+      default: false,
+    },
+    // Rule 27.2 — overhead presses count toward per-session OHP cap
+    is_overhead_press: {
+      type: Boolean,
+      default: false,
+    },
+
+    // ── Gender variant ───────────────────────────────────────────────────────
+    // Exercises sourced from the video library carry a gender tag because
+    // the demo video shows a specific athlete. 'both' means no gender-specific video.
+    gender: {
+      type: String,
+      enum: ['female', 'male', 'both'],
+      default: 'both',
+      index: true,
+    },
+
+    // ── Equipment Category (high-level, from the Excel dataset) ──────────────
+    // Distinct from `equipments` (the normalized refs). This is the coarse
+    // category used for quick filtering: Bodyweight / Free Weights / Resistance.
+    equipment_category: {
+      type: String,
+      enum: ['bodyweight', 'free_weights', 'resistance', 'machine', 'cardio', 'other'],
+      default: 'bodyweight',
+      index: true,
     },
 
     // ── Media ─────────────────────────────────────────────────────────────────
@@ -290,6 +374,8 @@ const ExerciseSchema = new mongoose.Schema(
  * ────────────────────────────────────────────────────────────────────────── */
 
 ExerciseSchema.index({ primary_muscle_groups: 1, deleted_at: 1 });
+ExerciseSchema.index({ primary_muscles: 1, deleted_at: 1 });
+ExerciseSchema.index({ workout_location: 1, deleted_at: 1 });
 ExerciseSchema.index({ equipments: 1, deleted_at: 1 });
 ExerciseSchema.index({ difficulty: 1, mechanic: 1, deleted_at: 1 });
 ExerciseSchema.index({ workout_split_category: 1, status: 1, deleted_at: 1 });

@@ -146,7 +146,8 @@ const verifyEmailVerificationOtp = async (email, submittedOtp) => {
   if (!stored) return { expired: true };
 
   if (String(stored.otp) !== String(submittedOtp)) {
-    await incrementAttempt(attemptsKey, OTP_CONFIG.maxVerifyAttempts, OTP_CONFIG.lockDurationSeconds);
+    const { maxVerifyAttempts, lockDurationSeconds } = OTP_CONFIG;
+    await incrementAttempt(attemptsKey, maxVerifyAttempts, lockDurationSeconds);
     return { invalid: true };
   }
 

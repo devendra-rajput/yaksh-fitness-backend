@@ -245,26 +245,18 @@ const generateExercises = async ({
     // Bucket by mechanic (compound first, then isolation/etc.)
     const compounds = exercises.filter((e) => e.mechanic === EXERCISE_MECHANIC.COMPOUND);
     const isolations = exercises.filter((e) => e.mechanic === EXERCISE_MECHANIC.ISOLATION);
-    const others = exercises.filter((e) => ![EXERCISE_MECHANIC.COMPOUND, EXERCISE_MECHANIC.ISOLATION].includes(e.mechanic));
-
+    const others = exercises.filter(
+      (e) => ![EXERCISE_MECHANIC.COMPOUND, EXERCISE_MECHANIC.ISOLATION].includes(e.mechanic),
+    );
     // Shuffle each bucket
     const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
     const pool = [...shuffle(compounds), ...shuffle(isolations), ...shuffle(others)];
 
-    // Deduplicate by _id and take `total`
-    const seen = new Set();
-    const selected = [];
-    for (const ex of pool) {
-      if (selected.length >= total) break;
-      const id = ex._id.toString();
-      if (!seen.has(id)) {
-        seen.add(id);
-        selected.push({
-          ...ex,
-          suggested: SET_REP_CONFIG[difficulty] || SET_REP_CONFIG[EXERCISE_DIFFICULTY.INTERMEDIATE],
-        });
-      }
-    }
+    // Take `total` and attach recommendations
+    const selected = pool.slice(0, total).map((ex) => ({
+      ...ex,
+      suggested: SET_REP_CONFIG[difficulty] || SET_REP_CONFIG[EXERCISE_DIFFICULTY.INTERMEDIATE],
+    }));
 
     return selected;
   } catch (error) {

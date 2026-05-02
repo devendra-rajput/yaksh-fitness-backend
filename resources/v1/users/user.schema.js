@@ -121,12 +121,14 @@ const UserSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: Object.values(USER_GENDER),
-        message: '{VALUE} is not a valid gender'
+        message: '{VALUE} is not a valid gender',
       },
-      default: USER_GENDER.PREFER_NOT_TO_SAY
+      default: USER_GENDER.PREFER_NOT_TO_SAY,
     },
     phone_code: { type: String, default: '', trim: true },
-    phone_number: { type: String, default: '', trim: true, index: true },
+    phone_number: {
+      type: String, default: '', trim: true, index: true,
+    },
     profile_picture: { type: String, default: '' },
 
     // ── Goals (Step 4) ──────────────────────────────────────
@@ -134,17 +136,17 @@ const UserSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: Object.values(FITNESS_GOAL),
-        message: '{VALUE} is not a valid fitness goal'
+        message: '{VALUE} is not a valid fitness goal',
       },
-      default: FITNESS_GOAL.STAY_ACTIVE
+      default: FITNESS_GOAL.STAY_ACTIVE,
     },
     fitness_level: {
       type: String,
       enum: {
         values: Object.values(FITNESS_LEVEL),
-        message: '{VALUE} is not a valid fitness level'
+        message: '{VALUE} is not a valid fitness level',
       },
-      default: FITNESS_LEVEL.INTERMEDIATE
+      default: FITNESS_LEVEL.INTERMEDIATE,
     },
 
     // ── Training Setup (Step 5) ─────────────────────────────
@@ -152,21 +154,21 @@ const UserSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: Object.values(TRAINING_LOCATION),
-        message: '{VALUE} is not a valid training location'
+        message: '{VALUE} is not a valid training location',
       },
-      default: TRAINING_LOCATION.GYM
+      default: TRAINING_LOCATION.GYM,
     },
     equipments: {
       type: [String],
-      default: []
+      default: [],
     },
     activity_level: {
       type: String,
       enum: {
         values: Object.values(ACTIVITY_LEVEL),
-        message: '{VALUE} is not a valid activity level'
+        message: '{VALUE} is not a valid activity level',
       },
-      default: ACTIVITY_LEVEL.MODERATELY_ACTIVE
+      default: ACTIVITY_LEVEL.MODERATELY_ACTIVE,
     },
 
     // ── Status & Role ────────────────────────────────────────
@@ -213,6 +215,38 @@ const UserSchema = new mongoose.Schema(
         default: '',
         select: false,
       },
+    },
+
+    // ── Workout Builder v4.0 Fields ─────────────────────────
+    // Rule 24 — user-flagged injury/limitation conditions
+    injuries: {
+      type: [{
+        type: { type: String, enum: ['knee', 'lower_back', 'shoulder', 'wrist', 'pregnancy'], required: true },
+        status: { type: String, enum: ['current', 'past'], default: 'current' },
+      }],
+      default: [],
+    },
+    // Rule 24.3 — active pregnancy trimester (1|2|3); null if not pregnant
+    pregnancy_trimester: {
+      type: Number,
+      enum: [1, 2, 3, null],
+      default: null,
+    },
+    // Rule 30.2 — opt-in to circuit format for fat-loss sessions
+    circuit_preference: {
+      type: Boolean,
+      default: false,
+    },
+    // Rule 18 — preferred weekly split
+    split_preference: {
+      type: String,
+      enum: ['ppl', 'upper_lower', 'bro'],
+      default: 'ppl',
+    },
+    // Rule 25.3 — show tempo string; null = auto (false for beginner, true for intermediate+)
+    tempo_display: {
+      type: Boolean,
+      default: null,
     },
 
     // ── Soft delete ──────────────────────────────────────────
@@ -292,5 +326,5 @@ module.exports = {
   FITNESS_GOAL,
   FITNESS_LEVEL,
   TRAINING_LOCATION,
-  ACTIVITY_LEVEL
+  ACTIVITY_LEVEL,
 };

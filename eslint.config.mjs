@@ -55,6 +55,7 @@ export default [
             'consistent-return': 'off',
             'import/no-extraneous-dependencies': 'off',
             'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+            'max-len': ['error', { code: 200, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true, ignoreComments: true }],
         },
     },
 ];

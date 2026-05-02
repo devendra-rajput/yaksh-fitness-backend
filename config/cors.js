@@ -51,6 +51,7 @@ const corsConfig = {
     'Origin',
     'x-timezone', // Custom header for timezone support
     'x-language', // Custom header for i18n support
+    'ngrok-skip-browser-warning', // Bypass ngrok browser warning in dev
   ],
 
   /**

@@ -12,8 +12,9 @@ const execAsync = promisify(exec);
  * Seeder configuration
  */
 const SEEDER_CONFIG = {
-  files: ['admin.js'],
-  timeout: 30000, // 30 seconds timeout per script
+  // Order matters: admin first, exercises after (exercises has no deps on admin)
+  files: ['admin.js', 'exercises.js'],
+  timeout: 120000, // exercises seeder processes 2,392 rows — needs more headroom
 };
 
 /**

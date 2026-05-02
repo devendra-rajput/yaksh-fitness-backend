@@ -43,6 +43,7 @@
         "strongPassword": "Password must be at least 8 characters and contain an uppercase letter, lowercase letter, number, and special character",
         "confirmPasswordNotMatch": "Password and confirm password do not match",
         "invalidOldPassword": "Current password is incorrect",
+        "currentPasswordRequired": "Current password is required",
         "newAndOldPasswordSame": "New password must be different from your current password"
     },
     "auth": {

@@ -15,53 +15,27 @@
  *  ✗ No direct DB/Redis calls – delegated to model / helpers
  */
 
-const path = require('path');
-const fs = require('fs');
-
 const response = require('../../../helpers/v1/response.helpers');
 const dataHelper = require('../../../helpers/v1/data.helpers');
 const otpHelper = require('../../../helpers/v1/otp.helpers');
 const UserModel = require('./users.model');
 const { ONBOARDING_STEPS } = require('../../../constants/onboarding');
-const { TOKEN_CONFIG } = require('../../../constants/auth');
 const { logger } = require('../../../utils/logger');
 
 // Lazy-loaded services
 const getNodemailer = () => require('../../../services/nodemailer'); // eslint-disable-line global-require
-const getAWS = () => require('../../../services/aws');               // eslint-disable-line global-require
-// const getSocketService = () => require('../../../services/socket');  // eslint-disable-line global-require
-// const getSocketEvents = () => require('../../../constants/socket_events'); // eslint-disable-line global-require
-const getGoogleService = () => require('../../../services/google');  // eslint-disable-line global-require
+const getAWS = () => require('../../../services/aws'); // eslint-disable-line global-require
+// const getSocketService = () => require('../../../services/socket');
+// const getSocketEvents = () => require('../../../constants/socket_events');
+const getGoogleService = () => require('../../../services/google'); // eslint-disable-line global-require
 
 // Lazy-loaded email templates
-const getVerificationTemplate = () => require('../../../emailTemplates/v1/verification');     // eslint-disable-line global-require
+const getVerificationTemplate = () => require('../../../emailTemplates/v1/verification'); // eslint-disable-line global-require
 const getForgotPasswordTemplate = () => require('../../../emailTemplates/v1/forgotPassword'); // eslint-disable-line global-require
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Pure Helpers
 ───────────────────────────────────────────────────────────────────────────── */
-
-const filePathToURL = (req, filePath) => {
-  const normalizedPath = filePath.replace(/\\/g, '/');
-  return `${req.protocol}://${req.get('host')}/${normalizedPath}`;
-};
-
-const deleteLocalFile = (fileUrl) => {
-  try {
-    const filePath = new URL(fileUrl).pathname;
-    const localPath = path.join(process.cwd(), filePath);
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
-    if (fs.existsSync(localPath)) {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
-      fs.unlinkSync(localPath);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    logger.error('deleteLocalFile Error', { error: error.message });
-    return false;
-  }
-};
 
 /**
  * Send email asynchronously (fire-and-forget – never blocks HTTP response).
@@ -88,7 +62,9 @@ const getOTPMessage = (res, otp) => (
  */
 const issueTokenPair = async (userId, role) => {
   const accessToken = dataHelper.generateJWTToken({ user_id: userId, role });
-  const { token: refreshToken, jti } = dataHelper.generateRefreshJWTToken({ user_id: userId, role });
+  const { token: refreshToken, jti } = dataHelper.generateRefreshJWTToken({
+    user_id: userId, role,
+  });
 
   // Persist refresh token in Redis with TTL
   await otpHelper.storeRefreshToken(String(userId), jti, refreshToken);
@@ -147,7 +123,7 @@ const register = async (req, res) => {
     email,
     password: hashedPassword,
     onboarding_step: ONBOARDING_STEPS.VERIFY_EMAIL,
-    ...(phone_code && phone_number && { phone_code, phone_number })
+    ...(phone_code && phone_number && { phone_code, phone_number }),
   };
 
   const newUser = await UserModel.createOne(userData);
@@ -231,20 +207,27 @@ const resendOtp = async (req, res) => {
  */
 const onboardingProfile = async (req, res) => {
   const { user } = req;
-  const { full_name, dob, height, height_unit, weight, weight_unit, gender } = req.body;
+  const {
+    full_name, dob, height, height_unit, weight, weight_unit, gender,
+  } = req.body;
 
   const [first_name = '', ...last_name_arr] = full_name.trim().split(' ');
   const last_name = last_name_arr.join(' ');
 
   const updatedUser = await UserModel.updateOne(user._id, {
     user_info: { first_name, last_name },
-    dob, height, height_unit, weight, weight_unit, gender,
-    onboarding_step: ONBOARDING_STEPS.GOALS
+    dob,
+    height,
+    height_unit,
+    weight,
+    weight_unit,
+    gender,
+    onboarding_step: ONBOARDING_STEPS.GOALS,
   });
 
   return response.success('auth.profileUpdated', res, {
     user: UserModel.getFormattedData(updatedUser),
-    onboarding_step: ONBOARDING_STEPS.GOALS
+    onboarding_step: ONBOARDING_STEPS.GOALS,
   });
 };
 
@@ -257,13 +240,14 @@ const onboardingGoals = async (req, res) => {
   const { goal, fitness_level } = req.body;
 
   const updatedUser = await UserModel.updateOne(user._id, {
-    goal, fitness_level,
-    onboarding_step: ONBOARDING_STEPS.TRAINING
+    goal,
+    fitness_level,
+    onboarding_step: ONBOARDING_STEPS.TRAINING,
   });
 
   return response.success('auth.profileUpdated', res, {
     user: UserModel.getFormattedData(updatedUser),
-    onboarding_step: ONBOARDING_STEPS.TRAINING
+    onboarding_step: ONBOARDING_STEPS.TRAINING,
   });
 };
 
@@ -276,13 +260,15 @@ const onboardingTraining = async (req, res) => {
   const { training_location, equipments, activity_level } = req.body;
 
   const updatedUser = await UserModel.updateOne(user._id, {
-    training_location, equipments, activity_level,
-    onboarding_step: ONBOARDING_STEPS.COMPLETE
+    training_location,
+    equipments,
+    activity_level,
+    onboarding_step: ONBOARDING_STEPS.COMPLETE,
   });
 
   return response.success('auth.profileUpdated', res, {
     user: UserModel.getFormattedData(updatedUser),
-    onboarding_step: ONBOARDING_STEPS.COMPLETE
+    onboarding_step: ONBOARDING_STEPS.COMPLETE,
   });
 };
 
@@ -632,20 +618,22 @@ const getUserProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
   const { user } = req;
   const {
-    full_name, dob, height, height_unit, weight, weight_unit, gender,
-    goal, fitness_level, training_location, equipments, activity_level
+    first_name, last_name, phone_number, phone_code,
+    dob, height, height_unit, weight, weight_unit, gender,
+    goal, fitness_level, training_location, equipments, activity_level,
+    injuries, pregnancy_trimester, split_preference, tempo_display,
   } = req.body;
 
   const updateData = {};
 
-  if (full_name) {
-    const [first_name = '', ...last_name_arr] = full_name.trim().split(' ');
+  if (first_name !== undefined || last_name !== undefined) {
     updateData.user_info = {
-      first_name,
-      last_name: last_name_arr.join(' ')
+      first_name: first_name ?? user.user_info?.first_name ?? '',
+      last_name: last_name ?? user.user_info?.last_name ?? '',
     };
   }
-
+  if (phone_number !== undefined) updateData.phone_number = phone_number;
+  if (phone_code !== undefined) updateData.phone_code = phone_code;
   if (dob !== undefined) updateData.dob = dob;
   if (height !== undefined) updateData.height = height;
   if (height_unit !== undefined) updateData.height_unit = height_unit;
@@ -657,6 +645,10 @@ const updateProfile = async (req, res) => {
   if (training_location !== undefined) updateData.training_location = training_location;
   if (equipments !== undefined) updateData.equipments = equipments;
   if (activity_level !== undefined) updateData.activity_level = activity_level;
+  if (injuries !== undefined) updateData.injuries = injuries;
+  if (pregnancy_trimester !== undefined) updateData.pregnancy_trimester = pregnancy_trimester;
+  if (split_preference !== undefined) updateData.split_preference = split_preference;
+  if (tempo_display !== undefined) updateData.tempo_display = tempo_display;
 
   const updatedUser = await UserModel.updateOne(user._id, updateData);
   if (!updatedUser) return response.exception('error.serverError', res, false);

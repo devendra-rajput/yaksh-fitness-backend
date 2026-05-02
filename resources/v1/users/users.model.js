@@ -119,7 +119,7 @@ const isUserExist = async (columnName, columnValue, excludeUserId = false) => {
 const updateOne = async (id, data) => {
   try {
     if (!id || !data) throw new Error('ID and data are required');
-    const user = await User.findByIdAndUpdate(id, data, { new: true, lean: true });
+    const user = await User.findByIdAndUpdate(id, data, { new: true, lean: true }).select('+password');
     if (!user) return false;
     invalidateUserListCache().catch((err) => logger.warn('Cache invalidation failed', { error: err.message }));
     return user;
@@ -212,7 +212,13 @@ const getFormattedData = (userObj) => {
     training_location: userObj.training_location || null,
     equipments: userObj.equipments || [],
     activity_level: userObj.activity_level || null,
+    injuries: userObj.injuries || [],
+    pregnancy_trimester: userObj.pregnancy_trimester !== undefined ? userObj.pregnancy_trimester : null,
+    split_preference: userObj.split_preference || 'ppl',
+    tempo_display: userObj.tempo_display !== undefined ? userObj.tempo_display : null,
+    circuit_preference: userObj.circuit_preference || false,
     has_google: !!userObj.google_id,
+    has_password: !!userObj.password,
     created_at: dataHelper.convertDateTimezoneAndFormat(userObj.created_at),
     updated_at: dataHelper.convertDateTimezoneAndFormat(userObj.updated_at),
   };

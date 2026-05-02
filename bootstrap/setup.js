@@ -76,6 +76,13 @@ const setupCORS = (app) => {
           return callback(null, true);
         }
 
+        // Allow ngrok tunnels in development for mobile testing
+        if (process.env.NODE_ENV !== 'production') {
+          if (origin.endsWith('.ngrok-free.app') || origin.endsWith('.ngrok.io') || origin.endsWith('.ngrok.app')) {
+            return callback(null, true);
+          }
+        }
+
         logger.error('Blocked by CORS', { origin });
         return callback(new Error('Not allowed by CORS'));
       },

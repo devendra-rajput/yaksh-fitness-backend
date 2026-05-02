@@ -46,7 +46,7 @@ const verifyIdToken = async (idToken) => {
     if (!payload) return false;
 
     return {
-      googleId: payload.sub,          // Stable Google user ID
+      googleId: payload.sub, // Stable Google user ID
       email: payload.email,
       emailVerified: payload.email_verified,
       firstName: payload.given_name || '',

@@ -21,21 +21,24 @@ const {
 /* ─── Reusable Joi primitives ───────────────────────────────────────────── */
 
 const SCHEMAS = Object.freeze({
-  email: Joi.string().email().lowercase().trim().required(),
+  email: Joi.string().email().lowercase().trim()
+    .required(),
   emailOptional: Joi.string().email().optional(),
   password: Joi.string().required(),
   newPassword: Joi.string().min(8).required(),
-  otp: Joi.string().length(6).pattern(/^\d+$/).required().messages({
-    'string.length': 'OTP must be exactly 6 digits',
-    'string.pattern.base': 'OTP must contain only digits',
-  }),
+  otp: Joi.string().length(6).pattern(/^\d+$/).required()
+    .messages({
+      'string.length': 'OTP must be exactly 6 digits',
+      'string.pattern.base': 'OTP must contain only digits',
+    }),
   phoneNumber: Joi.string().pattern(/^\d+$/).optional(),
   phoneCode: Joi.string().when('phone_number', {
     is: Joi.exist(),
     then: Joi.required(),
     otherwise: Joi.optional(),
   }),
-  firstName: Joi.string().min(1).max(50).trim().required(),
+  firstName: Joi.string().min(1).max(50).trim()
+    .required(),
   lastName: Joi.string().max(50).trim().optional(),
   imageUrl: Joi.string().uri().required(),
   fileName: Joi.string().required(),
@@ -106,7 +109,10 @@ const validationSchemas = Object.freeze({
     activity_level: SCHEMAS.activityLevel,
   },
   updateProfile: {
-    full_name: SCHEMAS.fullName.optional(),
+    first_name: SCHEMAS.firstName.optional(),
+    last_name: SCHEMAS.lastName,
+    phone_number: SCHEMAS.phoneNumber,
+    phone_code: Joi.string().optional(),
     dob: SCHEMAS.dob.optional(),
     height: SCHEMAS.height.optional(),
     height_unit: SCHEMAS.heightUnit.optional(),
@@ -118,6 +124,15 @@ const validationSchemas = Object.freeze({
     training_location: SCHEMAS.trainingLocation.optional(),
     equipments: SCHEMAS.equipments.optional(),
     activity_level: SCHEMAS.activityLevel.optional(),
+    injuries: Joi.array().items(
+      Joi.object({
+        type: Joi.string().valid('knee', 'lower_back', 'shoulder', 'wrist', 'pregnancy').required(),
+        status: Joi.string().valid('current', 'past').default('current'),
+      }),
+    ).optional(),
+    pregnancy_trimester: Joi.number().valid(1, 2, 3).allow(null).optional(),
+    split_preference: Joi.string().valid('ppl', 'upper_lower', 'bro').optional(),
+    tempo_display: Joi.boolean().allow(null).optional(),
   },
 
   // Auth
@@ -143,7 +158,7 @@ const validationSchemas = Object.freeze({
     reset_token: SCHEMAS.resetToken,
   },
   changePassword: {
-    old_password: SCHEMAS.password,
+    old_password: SCHEMAS.password.optional(),
     new_password: SCHEMAS.newPassword,
     confirm_new_password: SCHEMAS.newPassword,
   },
@@ -208,9 +223,13 @@ const validateChangePassword = async (req) => {
   const { old_password, new_password, confirm_new_password } = req.body;
   if (!validatePasswordStrength(new_password)) return 'validation.strongPassword';
   if (!validatePasswordMatch(new_password, confirm_new_password)) return 'validation.confirmPasswordNotMatch';
-  if (!validatePasswordsDifferent(new_password, old_password)) return 'validation.newAndOldPasswordSame';
-  const isOldPasswordValid = await dataHelper.validatePassword(old_password, req.user.password);
-  if (!isOldPasswordValid) return 'validation.invalidOldPassword';
+  const userHasPassword = !!req.user.password;
+  if (userHasPassword) {
+    if (!old_password) return 'validation.currentPasswordRequired';
+    if (!validatePasswordsDifferent(new_password, old_password)) return 'validation.newAndOldPasswordSame';
+    const isOldPasswordValid = await dataHelper.validatePassword(old_password, req.user.password);
+    if (!isOldPasswordValid) return 'validation.invalidOldPassword';
+  }
   return null;
 };
 
