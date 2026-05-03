@@ -66,7 +66,9 @@ const list = async (req, res) => {
       Exercise.countDocuments(q),
     ]);
 
-    return response.success('Favourite exercises fetched', res, { exercises, total, page, limit });
+    return response.success('Favourite exercises fetched', res, {
+      exercises, total, page, limit,
+    });
   } catch (error) {
     logger.error('FavouriteExerciseController@list Error:', { error: error.message });
     return response.exception('Failed to fetch favourite exercises', res);

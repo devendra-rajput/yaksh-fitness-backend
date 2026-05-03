@@ -8,6 +8,14 @@
 const response = require('../../../helpers/v1/response.helpers');
 const { generateWorkout } = require('./workout.model');
 const { logger } = require('../../../utils/logger');
+const { Exercise } = require('../exercises/exercise.schema');
+
+const LOCATION_FILTER = {
+  no_equipment: ['no_equipment'],
+  home_gym: ['no_equipment', 'home_gym'],
+  small_gym: ['no_equipment', 'home_gym', 'small_gym'],
+  large_gym: ['no_equipment', 'home_gym', 'small_gym', 'large_gym'],
+};
 
 const generate = async (req, res) => {
   try {
@@ -66,4 +74,37 @@ const generate = async (req, res) => {
   }
 };
 
-module.exports = { generate };
+const listExercises = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(24, Math.max(1, parseInt(req.query.limit) || 12));
+    const {
+      search = '', difficulty = '', mechanic = '', location = '',
+    } = req.query;
+
+    const q = { status: 'published', deleted_at: { $in: [null, '', ' '] } };
+    if (difficulty) q.difficulty = difficulty;
+    if (mechanic) q.mechanic = mechanic;
+    if (search.trim()) q.title = { $regex: search.trim(), $options: 'i' };
+    if (location && LOCATION_FILTER[location]) q.workout_location = { $in: LOCATION_FILTER[location] };
+
+    const [exercises, total] = await Promise.all([
+      Exercise.find(q)
+        .select('_id title slug mechanic difficulty primary_muscles thumbnail_url video_url is_bodyweight workout_location')
+        .sort({ title: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Exercise.countDocuments(q),
+    ]);
+
+    return response.success('Exercises fetched', res, {
+      exercises, total, page, limit,
+    });
+  } catch (error) {
+    logger.error('WorkoutController@listExercises Error:', { error: error.message });
+    return response.exception('Failed to fetch exercises', res);
+  }
+};
+
+module.exports = { generate, listExercises };

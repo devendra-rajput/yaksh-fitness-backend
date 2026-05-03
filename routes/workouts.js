@@ -11,4 +11,6 @@ router.post(
   workoutController.generate,
 );
 
+router.get('/exercises', [auth()], workoutController.listExercises);
+
 module.exports = router;
