@@ -18,7 +18,7 @@ const {
   EXERCISE_DIFFICULTY,
 } = require('../exercises/exercise.schema');
 const { MuscleGroup } = require('../exercises/muscle_group.schema');
-const { WorkoutHistory } = require('./workout_history.schema');
+const { WorkoutHistory } = require('../workout-history/schema');
 // Register Equipment model so Mongoose populate() works
 require('../exercises/equipment.schema');
 
@@ -152,30 +152,30 @@ const COMMON_QUERY = Object.freeze({
 
 // Maps frontend equipment picker IDs → actual equipment slugs used on exercises in DB
 const EQUIPMENT_FRONTEND_TO_DB = {
-  'dumbbells':              ['dumbbells', 'dumbbell'],
-  'barbell':                ['barbell', 'box-barbell'],
-  'cable-machine':          ['cable-crossover-machine', 'dual-cable-pulley-machine', 'cable-pulley-machine', 'cable-row-machine'],
-  'bench':                  [],
-  'kettlebell':             ['kettlebells'],
-  'ab-wheel':               ['ab-roller'],
-  'ez-bar':                 ['ez-bar'],
-  'v-bar':                  [],
-  'trap-bar':               ['trap-bar'],
-  'weight-plates':          ['weight-plate'],
-  'hyper-extension-bench':  ['hyperextension-bench'],
-  'lat-pulldown':           ['lat-pull-down-machine-cable'],
-  'cable':                  ['cable-crossover-machine', 'dual-cable-pulley-machine', 'cable-pulley-machine', 'cable-row-machine', 'cable-pulley-machine-rope-attachment', 'lat-pull-down-machine-cable'],
-  'pec-deck-fly':           ['dual-pec-deck-machine', 'pec-fly-rear-delt-machine', 'dual-pec-fly-machine'],
-  'rope-attachment':        ['cable-pulley-machine-rope-attachment'],
+  dumbbells: ['dumbbells', 'dumbbell'],
+  barbell: ['barbell', 'box-barbell'],
+  'cable-machine': ['cable-crossover-machine', 'dual-cable-pulley-machine', 'cable-pulley-machine', 'cable-row-machine'],
+  bench: [],
+  kettlebell: ['kettlebells'],
+  'ab-wheel': ['ab-roller'],
+  'ez-bar': ['ez-bar'],
+  'v-bar': [],
+  'trap-bar': ['trap-bar'],
+  'weight-plates': ['weight-plate'],
+  'hyper-extension-bench': ['hyperextension-bench'],
+  'lat-pulldown': ['lat-pull-down-machine-cable'],
+  cable: ['cable-crossover-machine', 'dual-cable-pulley-machine', 'cable-pulley-machine', 'cable-row-machine', 'cable-pulley-machine-rope-attachment', 'lat-pull-down-machine-cable'],
+  'pec-deck-fly': ['dual-pec-deck-machine', 'pec-fly-rear-delt-machine', 'dual-pec-fly-machine'],
+  'rope-attachment': ['cable-pulley-machine-rope-attachment'],
   // machine entries already present in workouts page that map directly
-  'smith-machine':          ['smith-machine'],
-  'leg-press':              ['leg-press-machine'],
-  'hack-squat':             ['hack-squat-machine'],
-  'leg-extension':          ['leg-extension-machine'],
-  'leg-curl':               ['seated-leg-curl-machine', 'hammer-strength-iso-lateral-leg-curl-machine'],
-  'chest-press':            ['chest-press-machine'],
+  'smith-machine': ['smith-machine'],
+  'leg-press': ['leg-press-machine'],
+  'hack-squat': ['hack-squat-machine'],
+  'leg-extension': ['leg-extension-machine'],
+  'leg-curl': ['seated-leg-curl-machine', 'hammer-strength-iso-lateral-leg-curl-machine'],
+  'chest-press': ['chest-press-machine'],
   'iso-lateral-shoulder-press': ['iso-lateral-shoulder-press-machine'],
-  'all-hammer-strength':    [
+  'all-hammer-strength': [
     'hammer-strength-mts-iso-lateral-biceps-curl-machine',
     'hammer-strength-mts-iso-lateral-decline-press-machine',
     'hammer-strength-plate-loaded-high-row-machine',

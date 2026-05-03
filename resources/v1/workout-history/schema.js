@@ -1,10 +1,3 @@
-/**
- * WorkoutHistory Model
- * Records completed workout sessions for use by Rules 12, 16, 29, and 3.3.
- * Generation is stateless — this schema is read by the generator and written
- * by a separate "complete workout" endpoint (out of scope for this PR).
- */
-
 const mongoose = require('mongoose');
 
 const ExerciseLogSchema = new mongoose.Schema(
@@ -14,7 +7,7 @@ const ExerciseLogSchema = new mongoose.Schema(
     sets_completed: { type: Number, default: 0 },
     reps_per_set: { type: [Number], default: [] },
     load_kg_per_set: { type: [Number], default: [] },
-    last_set_rir: { type: Number, default: null }, // null = not logged
+    last_set_rir: { type: Number, default: null },
   },
   { _id: false },
 );
@@ -33,8 +26,9 @@ const WorkoutHistorySchema = new mongoose.Schema(
       index: true,
     },
     session_type: { type: String, default: 'strength' },
-    muscle_groups: { type: [String], default: [] }, // UI muscle IDs e.g. ['chest', 'triceps']
+    muscle_groups: { type: [String], default: [] },
     is_deload: { type: Boolean, default: false },
+    calories_burned: { type: Number, default: 0 },
     exercises: { type: [ExerciseLogSchema], default: [] },
   },
   {

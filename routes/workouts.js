@@ -1,9 +1,3 @@
-/**
- * Workout Routes
- *
- * POST /api/v1/workouts/generate  — generate an AI workout plan
- */
-
 const express = require('express');
 const workoutController = require('../resources/v1/workouts/workout.controller');
 const workoutValidation = require('../resources/v1/workouts/workout.validation');

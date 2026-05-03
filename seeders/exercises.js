@@ -172,9 +172,7 @@ const parseMuscles = (text) => {
   let depth = 0;
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
-    if (ch === '(') { depth += 1; current += ch; }
-    else if (ch === ')') { depth -= 1; current += ch; }
-    else if (ch === ',' && depth === 0) {
+    if (ch === '(') { depth += 1; current += ch; } else if (ch === ')') { depth -= 1; current += ch; } else if (ch === ',' && depth === 0) {
       const trimmed = current.trim();
       if (trimmed) results.push(trimmed);
       current = '';
